@@ -2672,6 +2672,26 @@
   let _coverObserver = null;
   let _coverSaveTimer = null;
 
+  /* 429（レート制限）回避：同時実行を絞ってバーストを防ぐ簡易キュー */
+  const COVER_CONCURRENCY = 2;
+  let _coverActive = 0;
+  const _coverQueue = [];
+  function _coverPump() {
+    while (_coverActive < COVER_CONCURRENCY && _coverQueue.length) {
+      const job = _coverQueue.shift();
+      _coverActive++;
+      job().then(() => { _coverActive--; _coverPump(); },
+                () => { _coverActive--; _coverPump(); });
+    }
+  }
+  function _enqueueCover(fn) {
+    return new Promise((resolve, reject) => {
+      _coverQueue.push(() => fn().then(resolve, reject));
+      _coverPump();
+    });
+  }
+  const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
   function loadCoverCache() {
     if (_coverCache) return _coverCache;
     try { _coverCache = JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || '{}'); }
@@ -2684,26 +2704,33 @@
       try { localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(_coverCache)); } catch (e) {}
     }, 600);
   }
-  function fetchGoogleCover(book) {
-    const q = `intitle:${book.title} inauthor:${book.author}`;
+  function _gbQuery(q, attempt) {
     const url = 'https://www.googleapis.com/books/v1/volumes?country=JP&maxResults=1&q=' + encodeURIComponent(q);
-    return fetch(url)
-      .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
-      .then(data => {
-        const item  = data && data.items && data.items[0];
-        const links = item && item.volumeInfo && item.volumeInfo.imageLinks;
-        let img = links && (links.thumbnail || links.smallThumbnail);
-        if (!img) return '';
-        return img.replace(/^http:/, 'https:');
-      });
+    return fetch(url).then(r => {
+      if (r.status === 429 && attempt < 3) {
+        return _sleep(700 * (attempt + 1) + Math.random() * 400).then(() => _gbQuery(q, attempt + 1));
+      }
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).then(data => {
+      const item  = data && data.items && data.items[0];
+      const links = item && item.volumeInfo && item.volumeInfo.imageLinks;
+      let img = links && (links.thumbnail || links.smallThumbnail);
+      return img ? img.replace(/^http:/, 'https:') : '';
+    });
+  }
+  function fetchGoogleCover(book) {
+    /* まず タイトル+著者、ヒットしなければ タイトルのみ で再検索 */
+    return _gbQuery(`intitle:${book.title} inauthor:${book.author}`, 0)
+      .then(img => img || _gbQuery(book.title, 0));
   }
   function getCoverUrl(book) {
     const cache = loadCoverCache();
     const key = String(book.id);
-    if (key in cache) return Promise.resolve(cache[key]);
+    if (key in cache && cache[key]) return Promise.resolve(cache[key]);
     if (_coverInflight[key]) return _coverInflight[key];
-    const p = fetchGoogleCover(book)
-      .then(u => { cache[key] = u || ''; saveCoverCache(); delete _coverInflight[key]; return cache[key]; })
+    const p = _enqueueCover(() => fetchGoogleCover(book))
+      .then(u => { if (u) { cache[key] = u; saveCoverCache(); } delete _coverInflight[key]; return u || ''; })
       .catch(() => { delete _coverInflight[key]; return ''; });
     _coverInflight[key] = p;
     return p;
