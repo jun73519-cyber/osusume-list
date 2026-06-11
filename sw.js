@@ -1,7 +1,7 @@
 // おすすめリスト Service Worker
 // アプリ本体（同一オリジンの静的ファイル）はキャッシュしてオフライン対応。
 // GAS(クラウド)へのデータ通信はキャッシュせず常に最新を取得する。
-const CACHE_NAME = 'osusume-list-v2';
+const CACHE_NAME = 'osusume-list-v3';
 const APP_SHELL = [
   './',
   './index.html',

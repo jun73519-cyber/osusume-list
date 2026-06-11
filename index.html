@@ -12,6 +12,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="おすすめリスト" />
+  <script>
+    /* FOUC防止：CSS適用前にテーマを確定 */
+    (function () {
+      try {
+        var saved = localStorage.getItem('osusume-theme');
+        var t = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -84,6 +94,23 @@
     }
 
     header h1 { font-size: 1.18rem; font-weight: 800; letter-spacing: .02em; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+    #btn-theme {
+      margin-left: auto;
+      width: 34px; height: 34px;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,.22);
+      border: 1.5px solid rgba(255,255,255,.5);
+      border-radius: 50%;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    #btn-theme:hover  { background: rgba(255,255,255,.36); }
+    #btn-theme:active { transform: scale(.92); }
+    /* テーマボタンがある時は同期インジケーターの auto を無効化 */
+    #btn-theme ~ #sync-indicator { margin-left: 8px; }
 
     /* ── クラウド同期インジケーター ── */
     #sync-indicator {
@@ -1408,6 +1435,103 @@
       margin-top: 3px;
       flex-shrink: 0;
     }
+    /* ══════════════════════════════
+       表紙画像（本棚風）
+    ══════════════════════════════ */
+    .cover-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      z-index: 0;
+      background: rgba(0,0,0,.04);
+    }
+    .book-spotlight-cover,
+    .book-list-mini-cover,
+    .book-modal-cover { position: relative; }
+    .book-spotlight-cover,
+    .book-list-mini-cover { overflow: hidden; }
+    /* 画像が載ったらバッジ類を前面へ */
+    .book-read-badge,
+    .book-rating-dot { z-index: 2; }
+    /* 表紙ロード中のふんわり表示 */
+    .cover-img { opacity: 0; transition: opacity .35s ease; }
+    .cover-img.loaded { opacity: 1; }
+
+    /* ══════════════════════════════
+       ダークモード
+    ══════════════════════════════ */
+    :root[data-theme="dark"] {
+      --bg:        #14130f;
+      --bg-grad:   radial-gradient(1200px 600px at 100% -10%, #241f17 0%, rgba(36,31,23,0) 60%),
+                   radial-gradient(900px 500px at -10% 0%, #161a21 0%, rgba(22,26,33,0) 55%),
+                   #131210;
+      --surface:   #1e1c18;
+      --surface-2: #26241f;
+      --border:    #35322c;
+      --gold-lt:   #2d2618;
+      --text:      #f0ece3;
+      --muted:     #a8a294;
+      --green-lt:  #14281f;
+      --red-lt:    #2d1b1b;
+      --primary-lt:#1b2740;
+      --shadow:    0 1px 2px rgba(0,0,0,.45), 0 6px 18px rgba(0,0,0,.5);
+      --shadow-lg: 0 12px 44px rgba(0,0,0,.6);
+    }
+    [data-theme="dark"] body { color: var(--text); }
+
+    /* 入力欄 */
+    [data-theme="dark"] input[type="text"],
+    [data-theme="dark"] select,
+    [data-theme="dark"] textarea { background: #26241f; color: var(--text); }
+    [data-theme="dark"] input[type="text"]:focus,
+    [data-theme="dark"] select:focus,
+    [data-theme="dark"] textarea:focus { background: #2e2b24; }
+    [data-theme="dark"] select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    }
+
+    /* タブ・ボタン類 */
+    [data-theme="dark"] .tab-nav {
+      background: rgba(24,22,19,.82);
+      border-bottom-color: rgba(53,50,44,.7);
+    }
+    [data-theme="dark"] #btn-force-reload { border-color: #2c3c5a; }
+    [data-theme="dark"] #btn-force-reload:hover { background: #243250; }
+    [data-theme="dark"] .btn-ghost { background: #2a2822; color: var(--muted); }
+    [data-theme="dark"] .btn-ghost:hover { background: #34312a; }
+    [data-theme="dark"] .btn-map-disabled { background: #2a2822; color: #6b665c; }
+    [data-theme="dark"] .btn-icon:hover { background: #2e2a20; }
+    [data-theme="dark"] .btn-backup { border-color: #3a372f; }
+
+    /* 検索 */
+    [data-theme="dark"] .search-clear { background: #3a362e; color: #cfc9bd; }
+    [data-theme="dark"] .search-clear:hover { background: #46423a; }
+
+    /* リスト・スポットライト・アコーディオン */
+    [data-theme="dark"] .book-list-item { border-bottom-color: #2c2a24; }
+    [data-theme="dark"] .book-list-item:hover { background: #26241f; }
+    [data-theme="dark"] .book-spotlight { background: #26241f; }
+    [data-theme="dark"] .book-spotlight:hover { background: #2e2b24; }
+    [data-theme="dark"] .acc-header:hover { background: #26241f; }
+
+    /* バッジ・補足テキスト */
+    [data-theme="dark"] .book-genre-badge { background: #2c2a24; color: #b0a99c; }
+    [data-theme="dark"] .sub-genre-badge { background: #2c2a24; color: #b0a99c; }
+    [data-theme="dark"] .card-my-review { background: #16271d; color: #9fcbac; }
+    [data-theme="dark"] .book-modal-desc { color: #c2bcb0; }
+    [data-theme="dark"] .modal-handle { background: #4a463d; }
+
+    /* 評価ボタンのアクティブ背景 */
+    [data-theme="dark"] .rating-btn.active-5 { background: #2e2a14; }
+    [data-theme="dark"] .rating-btn.active-3 { background: #15291a; }
+    [data-theme="dark"] .rating-btn.active-1 { background: #2e2614; }
+    [data-theme="dark"] .btn-see-all.open { background: #2c2418; }
+
+    /* 表紙プレースホルダ背景をダークに */
+    [data-theme="dark"] .cover-img { background: rgba(255,255,255,.04); }
   </style>
 </head>
 <body>
@@ -1415,6 +1539,7 @@
 <header>
   <span class="dot"></span>
   <h1>おすすめリスト</h1>
+  <button id="btn-theme" onclick="toggleTheme()" title="ダークモード切替" aria-label="ダークモード切替">🌙</button>
   <span id="sync-indicator" class="idle"></span>
   <button id="btn-force-reload" onclick="forceReloadFromCloud()" title="クラウドから最新データを強制取得">🔄</button>
 </header>
@@ -2087,6 +2212,27 @@
     if (id === 'books') renderBookGallery();
   }
 
+  /* ══════════════════════════════
+     🌙 ダークモード切替
+  ══════════════════════════════ */
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('osusume-theme', t); } catch (e) {}
+    const btn = document.getElementById('btn-theme');
+    if (btn) {
+      btn.textContent = t === 'dark' ? '☀️' : '🌙';
+      btn.title = t === 'dark' ? 'ライトモードに切替' : 'ダークモードに切替';
+    }
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', t === 'dark' ? '#1e1c18' : '#c9a96e');
+  }
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  }
+  /* 起動時にボタン表示を現在テーマへ同期（FOUC防止スクリプトで data-theme は確定済み） */
+  applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+
   /* ══════════════════════════════════════════════════════
      ☁ Google Apps Script クラウド同期
      ─ 下の GAS_URL に発行したURLを貼り付けてください ─
@@ -2206,7 +2352,7 @@
     {id:2011,section:'思考法・ビジネスの基礎',title:'観察力の鍛え方',author:'佐渡島庸平',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2012,section:'思考法・ビジネスの基礎',title:'メモの魔力',author:'前田裕二',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2013,section:'思考法・ビジネスの基礎',title:'書くのがしんどい',author:'竹村俊助',recommender:REC,youtubeUrl:YT_BOOK},
-    {id:2014,section:'思考法・ビジネスの基礎',title:'各技術・伝える技術',author:'倉島保美',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2014,section:'思考法・ビジネスの基礎',title:'書く技術・伝える技術',author:'倉島保美',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2015,section:'思考法・ビジネスの基礎',title:'伝え方が9割',author:'佐々木圭一',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2016,section:'思考法・ビジネスの基礎',title:'1分で話せ',author:'伊藤羊一',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2017,section:'思考法・ビジネスの基礎',title:'ザ・コピーライティング',author:'ジョン・ケープルズ',recommender:REC,youtubeUrl:YT_BOOK},
@@ -2283,7 +2429,7 @@
     {id:2084,section:'哲学・心理学・生き方',title:'完訳 7つの習慣',author:'スティーブン・R・コヴィー',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2085,section:'哲学・心理学・生き方',title:'夢をかなえるゾウ',author:'水野敬也',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2086,section:'哲学・心理学・生き方',title:'世界のエリートはなぜ「美意識」を鍛えるのか？',author:'山口周',recommender:REC,youtubeUrl:YT_BOOK},
-    {id:2087,section:'哲学・心理学・生き方',title:'人を変える',author:'デール・カーネギー',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2087,section:'哲学・心理学・生き方',title:'人を動かす',author:'デール・カーネギー',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2088,section:'哲学・心理学・生き方',title:'仕事は楽しいかね？',author:'デイル・ドーテン',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2089,section:'哲学・心理学・生き方',title:'スタンフォードの自分を変える教室',author:'ケリー・マクゴニガル',recommender:REC,youtubeUrl:YT_BOOK},
     {id:2090,section:'哲学・心理学・生き方',title:'1%の努力',author:'ひろゆき',recommender:REC,youtubeUrl:YT_BOOK},
@@ -2517,6 +2663,89 @@
     renderBookGallery();
   }
 
+  /* ══════════════════════════════
+     📕 表紙画像（Google Books・遅延読込＋localStorageキャッシュ）
+  ══════════════════════════════ */
+  const COVER_CACHE_KEY = 'osusume-book-covers';
+  let _coverCache = null;
+  const _coverInflight = {};
+  let _coverObserver = null;
+  let _coverSaveTimer = null;
+
+  function loadCoverCache() {
+    if (_coverCache) return _coverCache;
+    try { _coverCache = JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || '{}'); }
+    catch (e) { _coverCache = {}; }
+    return _coverCache;
+  }
+  function saveCoverCache() {
+    if (_coverSaveTimer) clearTimeout(_coverSaveTimer);
+    _coverSaveTimer = setTimeout(() => {
+      try { localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(_coverCache)); } catch (e) {}
+    }, 600);
+  }
+  function fetchGoogleCover(book) {
+    const q = `intitle:${book.title} inauthor:${book.author}`;
+    const url = 'https://www.googleapis.com/books/v1/volumes?country=JP&maxResults=1&q=' + encodeURIComponent(q);
+    return fetch(url)
+      .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+      .then(data => {
+        const item  = data && data.items && data.items[0];
+        const links = item && item.volumeInfo && item.volumeInfo.imageLinks;
+        let img = links && (links.thumbnail || links.smallThumbnail);
+        if (!img) return '';
+        return img.replace(/^http:/, 'https:');
+      });
+  }
+  function getCoverUrl(book) {
+    const cache = loadCoverCache();
+    const key = String(book.id);
+    if (key in cache) return Promise.resolve(cache[key]);
+    if (_coverInflight[key]) return _coverInflight[key];
+    const p = fetchGoogleCover(book)
+      .then(u => { cache[key] = u || ''; saveCoverCache(); delete _coverInflight[key]; return cache[key]; })
+      .catch(() => { delete _coverInflight[key]; return ''; });
+    _coverInflight[key] = p;
+    return p;
+  }
+  function insertCover(el, url) {
+    if (!url || el.querySelector('img.cover-img')) return;
+    const img = document.createElement('img');
+    img.className = 'cover-img';
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.onload  = () => img.classList.add('loaded');
+    img.onerror = () => img.remove();
+    img.src = url;
+    el.insertBefore(img, el.firstChild);
+  }
+  function loadCoverInto(el) {
+    if (el.dataset.coverDone) return;
+    el.dataset.coverDone = '1';
+    const book = books.find(b => b.id === +el.dataset.coverId);
+    if (book) getCoverUrl(book).then(u => insertCover(el, u));
+  }
+  function hydrateBookCovers() {
+    const targets = document.querySelectorAll('#book-grid [data-cover-id]');
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach(loadCoverInto);
+      return;
+    }
+    if (_coverObserver) _coverObserver.disconnect();
+    _coverObserver = new IntersectionObserver((entries, obs) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) { loadCoverInto(entry.target); obs.unobserve(entry.target); }
+      });
+    }, { rootMargin: '300px' });
+    targets.forEach(el => _coverObserver.observe(el));
+  }
+  function applyModalCover(book) {
+    const el = document.getElementById('bm-cover');
+    if (el) getCoverUrl(book).then(u => { if (activeBookId === book.id) insertCover(el, u); });
+  }
+
   /* ── スポットライトカード ── */
   function bookSpotlightHtml(book) {
     const st = SECTION_STYLE[book.section] || { cls: 'genre-default', emoji: '📖' };
@@ -2526,7 +2755,7 @@
       : `<span class="book-list-unread-badge">未読</span>`;
     return `
       <div class="book-spotlight" onclick="openBookModal(${book.id})">
-        <div class="book-spotlight-cover ${st.cls}">
+        <div class="book-spotlight-cover ${st.cls}" data-cover-id="${book.id}">
           ${st.emoji}
           ${book.read ? '<span class="book-read-badge" style="font-size:0.55rem;padding:2px 5px">読了</span>' : ''}
         </div>
@@ -2543,7 +2772,7 @@
     const ratingDot = book.rating != null ? `<span class="book-rating-dot">${RATING_EMOJI[book.rating] || ''}</span>` : '';
     return `
       <div class="book-card" onclick="openBookModal(${book.id})">
-        <div class="book-cover ${st.cls}">
+        <div class="book-cover ${st.cls}" data-cover-id="${book.id}">
           <span class="book-cover-emoji">${st.emoji}</span>
           ${book.read ? '<span class="book-read-badge">読了</span>' : ''}
           ${ratingDot}
@@ -2561,7 +2790,7 @@
       return `
         <div class="book-list-item${book.read ? ' is-read' : ''}" onclick="openBookModal(${book.id})">
           <span class="book-list-num">${i + 1}</span>
-          <div class="book-list-mini-cover ${st.cls}">${st.emoji}</div>
+          <div class="book-list-mini-cover ${st.cls}" data-cover-id="${book.id}">${st.emoji}</div>
           <div class="book-list-info">
             <div class="book-list-title">${esc(book.title)}</div>
             <div class="book-list-author">${esc(book.author)}</div>
@@ -2628,6 +2857,7 @@
       const label = q ? `「${bookSearchQuery}」の検索結果 ${filtered.length}冊` : '';
       grid.innerHTML = (label ? `<p style="font-size:0.8rem;color:#999;padding:4px 2px">${label}</p>` : '')
         + renderBooks(filtered);
+      hydrateBookCovers();
       return;
     }
 
@@ -2683,6 +2913,7 @@
     }).join('');
 
     grid.innerHTML = recHtml + `<div class="genre-grid">${sectionsHtml}</div>`;
+    hydrateBookCovers();
   }
 
   function openBookModal(id) {
@@ -2693,6 +2924,7 @@
 
     document.getElementById('bm-cover').className = `book-modal-cover ${st.cls}`;
     document.getElementById('bm-cover').innerHTML = `<span style="font-size:2.2rem">${st.emoji}</span>`;
+    applyModalCover(book);
     document.getElementById('bm-title').textContent  = book.title;
     document.getElementById('bm-author').textContent = book.author;
     document.getElementById('bm-genre').textContent  = book.section;
