@@ -1,0 +1,2770 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>おすすめリスト</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #f2f0eb;
+      --surface:  #ffffff;
+      --border:   #e6e3db;
+      --gold:     #c9a96e;
+      --gold-dk:  #b8954f;
+      --text:     #1e1e1e;
+      --muted:    #888;
+      --green:    #3fa876;
+      --green-lt: #eaf7f1;
+      --red-lt:   #fef0f0;
+      --red:      #d95f5f;
+      --map-btn:  #3b7de8;
+      --map-btn-dk: #2e68cc;
+      --radius:   16px;
+      --shadow:   0 2px 12px rgba(0,0,0,.08);
+      --shadow-lg:0 6px 28px rgba(0,0,0,.12);
+    }
+
+    body {
+      font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── ヘッダー ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .dot { width: 9px; height: 9px; background: var(--gold); border-radius: 50%; flex-shrink: 0; }
+
+    header h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: .04em; }
+
+    /* ── クラウド同期インジケーター ── */
+    #sync-indicator {
+      margin-left: auto;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+      transition: background .3s, color .3s;
+    }
+    #sync-indicator.idle    { display: none; }
+    #sync-indicator.syncing { background: #fff8e1; color: #b8860b; }
+    #sync-indicator.ok      { background: #eaf7f1; color: #2e7d5e; }
+    #sync-indicator.offline { background: #fef0f0; color: #c0392b; }
+    #sync-indicator.no-url  { display: none; }
+
+    #btn-force-reload {
+      margin-left: 6px;
+      padding: 5px 11px;
+      background: var(--primary-lt, #eef2fc);
+      color: var(--primary, #3b6fd4);
+      border: 1.5px solid #c5d8f8;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s, transform .1s;
+      display: none;   /* GAS_URL が設定されるまで非表示 */
+    }
+    #btn-force-reload:hover  { background: #d6e4f7; }
+    #btn-force-reload:active { transform: scale(.95); }
+    #btn-force-reload.spinning { animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── コンテナ ── */
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* ── フォームパネル ── */
+    .panel {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: none;
+      border: none;
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      color: var(--gold);
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .panel-toggle .arrow {
+      font-size: 0.7rem;
+      transition: transform .2s;
+    }
+
+    .panel-toggle.open .arrow { transform: rotate(180deg); }
+
+    .panel-body {
+      display: none;
+      padding: 0 20px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .panel-body.open { display: block; }
+
+    /* ── フォーム ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding-top: 16px;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label { font-size: 0.72rem; font-weight: 600; color: var(--muted); letter-spacing: .04em; }
+
+    input[type="text"], select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 1rem;
+      font-family: inherit;
+      background: #faf9f6;
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      -webkit-appearance: none;
+    }
+
+    input[type="text"]:focus, select:focus, textarea:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(201,169,110,.14);
+      background: #fff;
+    }
+
+    select {
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px;
+    }
+
+    .btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+
+    button { font-family: inherit; cursor: pointer; border: none; border-radius: 10px; font-weight: 600; transition: transform .1s, background .15s, box-shadow .15s; }
+    button:active { transform: scale(.96); }
+
+    .btn-primary { background: var(--gold); color: #fff; padding: 12px 24px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(201,169,110,.3); }
+    .btn-primary:hover { background: var(--gold-dk); }
+
+    .btn-ghost { background: #f0ede6; color: var(--muted); padding: 12px 20px; font-size: 0.9rem; }
+    .btn-ghost:hover { background: #e6e2d8; }
+
+    /* ── 検索バー ── */
+    .search-wrap {
+      position: relative;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      pointer-events: none;
+      color: #bbb;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 13px 40px 13px 42px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      font-size: 1rem;
+      font-family: inherit;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      box-shadow: var(--shadow);
+      transition: border-color .15s, box-shadow .15s;
+      -webkit-appearance: none;
+    }
+
+    .search-input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(201,169,110,.14);
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #e8e4dc;
+      border: none;
+      border-radius: 999px;
+      width: 22px;
+      height: 22px;
+      font-size: 0.7rem;
+      color: #888;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .search-clear.visible { display: flex; }
+    .search-clear:hover { background: #ddd; }
+
+    /* ── フィルター ── */
+    .filter-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .filter-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+
+    .filter-scroll::-webkit-scrollbar { display: none; }
+
+    .chip {
+      flex-shrink: 0;
+      padding: 7px 16px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .chip.active, .chip:hover { background: var(--gold); border-color: var(--gold); color: #fff; }
+
+    .chip-visited { }
+    .chip-visited.active, .chip-visited:hover { background: var(--green); border-color: var(--green); color: #fff; }
+
+    .filter-meta { display: flex; justify-content: flex-end; }
+    .count { font-size: 0.75rem; color: #bbb; }
+
+    /* ── リスト ── */
+    #list { display: flex; flex-direction: column; gap: 14px; }
+
+    /* ── アイテムカード ── */
+    .item-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: fadeUp .22s ease;
+      transition: box-shadow .2s, opacity .2s;
+    }
+
+    .item-card:hover { box-shadow: var(--shadow-lg); }
+
+    .item-card.visited {
+      border-left: 4px solid var(--green);
+      background: linear-gradient(135deg, #f6fdf7 0%, #fff 100%);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    /* カードヘッダー */
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 16px 0;
+      position: relative;
+      z-index: 5;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: .03em;
+      white-space: nowrap;
+    }
+
+    .badge-飲食店    { background: #fde8c8; color: #9a5800; }
+    .badge-居酒屋    { background: #fde0e0; color: #a02828; }
+    .badge-カフェ・バー { background: #ede8fd; color: #4e2fa3; }
+    .badge-本        { background: #d6eaf8; color: #1a5280; }
+    .badge-食べ物    { background: #d5f5e3; color: #196b3a; }
+    .badge-その他    { background: #eeece8; color: #666; }
+
+    .card-date { font-size: 0.68rem; color: #ccc; margin-left: auto; white-space: nowrap; }
+
+    .btn-icon {
+      background: none;
+      border: none;
+      padding: 6px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      line-height: 1;
+      color: #ccc;
+      cursor: pointer;
+      transition: color .15s, background .15s;
+      position: relative;
+      z-index: 10;
+      pointer-events: auto;
+    }
+
+    .btn-icon:hover { color: var(--gold); background: #fdf5e8; }
+    .btn-icon.del:hover { color: var(--red); background: var(--red-lt); }
+
+    /* カード本文 */
+    .card-body { padding: 10px 16px 4px; }
+
+    .card-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.35;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .card-name a {
+      color: #2563eb;
+      text-decoration: none;
+      display: inline;
+      position: relative;
+      z-index: 1;
+    }
+
+    .card-name a:hover {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      color: #1d4ed8;
+    }
+
+    .card-visited-badge {
+      display: none;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 4px;
+    }
+
+    .item-card.visited .card-visited-badge { display: inline-flex; }
+    .item-card.visited .card-name { text-decoration: none; color: inherit; }
+
+    .card-meta { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+    .card-address { font-size: 0.78rem; color: #999; margin-bottom: 4px; word-break: break-word; }
+
+    /* ── ビュー切り替えボタン ── */
+    .view-toggle {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+      margin-bottom: 10px;
+    }
+    .view-btn {
+      background: var(--surface);
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      padding: 5px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .view-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    /* ── リスト表示 ── */
+    .book-list { display: flex; flex-direction: column; gap: 0; }
+    .book-list-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0ede6;
+      cursor: pointer;
+      transition: background .15s;
+      border-radius: 0;
+    }
+    .book-list-item:first-child { border-radius: 12px 12px 0 0; }
+    .book-list-item:last-child  { border-bottom: none; border-radius: 0 0 12px 12px; }
+    .book-list-item:hover { background: #faf8f4; }
+    .book-list-item.is-read { opacity: .65; }
+    .book-list-num {
+      font-size: 0.72rem;
+      color: #bbb;
+      min-width: 22px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .book-list-mini-cover {
+      width: 32px;
+      height: 40px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    .book-list-info { flex: 1; min-width: 0; }
+    .book-list-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .book-list-author {
+      font-size: 0.74rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .book-list-read-badge {
+      font-size: 0.68rem;
+      background: #d4edda;
+      color: #155724;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .book-list-unread-badge {
+      font-size: 0.68rem;
+      background: #e8f4fd;
+      color: #1a6fa8;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* チェーン・デリバリータグ */
+    .tag-special {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .tag-chain    { background: #fff3cd; color: #856404; }
+    .tag-delivery { background: #d4edda; color: #155724; }
+
+    .card-review {
+      font-size: 0.85rem;
+      color: #555;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .card-my-review {
+      font-size: 0.83rem;
+      color: #5a7a5a;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f0f7f0;
+      border-left: 3px solid #7bbf7b;
+      border-radius: 0 6px 6px 0;
+      padding: 6px 10px;
+      margin-top: 6px;
+    }
+    .card-my-review-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #5a9a5a;
+      margin-bottom: 2px;
+      display: block;
+    }
+    .card-review-placeholder {
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* カードフッター（ボタン群） */
+    .card-foot {
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px 16px;
+    }
+
+    .btn-map {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 13px 16px;
+      background: var(--map-btn);
+      color: #fff;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background .15s, transform .1s;
+    }
+
+    .btn-map:active { transform: scale(.96); }
+    .btn-map:hover { background: var(--map-btn-dk); }
+
+    .btn-visit {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 13px 16px;
+      background: var(--green-lt);
+      color: var(--green);
+      border: 1.5px solid #b5e8d3;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s, transform .1s;
+    }
+
+    .btn-visit:active { transform: scale(.96); }
+    .btn-visit:hover { background: #d5f2e7; }
+
+    .btn-visit.done {
+      background: var(--green);
+      color: #fff;
+      border-color: var(--green);
+    }
+
+    /* マップURLなしの場合 */
+    .btn-map-disabled {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 13px 16px;
+      background: #f0ede6;
+      color: #ccc;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: default;
+    }
+
+    /* YouTube ボタン */
+    .btn-youtube {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 13px 14px;
+      background: #ff0000;
+      color: #fff;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background .15s, transform .1s;
+      white-space: nowrap;
+    }
+
+    .btn-youtube:active { transform: scale(.96); }
+    .btn-youtube:hover  { background: #cc0000; }
+
+    /* フッターレイアウト調整 */
+    .card-foot {
+      flex-wrap: wrap;
+    }
+
+    .card-foot-row1 {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .card-foot-row1 .btn-map,
+    .card-foot-row1 .btn-map-disabled { flex: 1; }
+    .card-foot-row1 .btn-youtube:only-child { flex: 1; }
+
+    .btn-visit-full {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px 16px;
+      background: var(--green-lt);
+      color: var(--green);
+      border: 1.5px solid #b5e8d3;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s, transform .1s;
+    }
+
+    .btn-visit-full:active { transform: scale(.96); }
+    .btn-visit-full:hover  { background: #d5f2e7; }
+
+    .btn-visit-full.done {
+      background: var(--green);
+      color: #fff;
+      border-color: var(--green);
+    }
+
+    .empty { text-align: center; color: #bbb; font-size: 0.9rem; padding: 56px 0; }
+
+    /* ── 編集モーダル ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.4);
+      z-index: 200;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border-radius: 22px 22px 0 0;
+      padding: 24px 20px 36px;
+      width: 100%;
+      max-width: 640px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 -6px 32px rgba(0,0,0,.16);
+      animation: slideUp .22s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(40px); opacity: 0; }
+      to   { transform: none; opacity: 1; }
+    }
+
+    .modal-handle {
+      width: 40px; height: 4px;
+      background: #ddd;
+      border-radius: 999px;
+      margin: 0 auto 20px;
+    }
+
+    .modal-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      color: var(--gold);
+      margin-bottom: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .modal-actions .btn-ghost,
+    .modal-actions .btn-primary { flex: 1; text-align: center; }
+
+    /* デスクトップ */
+    @media (min-width: 640px) {
+      header { padding: 22px 32px; }
+      header h1 { font-size: 1.3rem; }
+      .container { padding: 32px 20px 60px; }
+      .modal-overlay { align-items: center; padding: 20px; }
+      .modal { border-radius: 20px; padding: 32px; max-height: 85vh; }
+      .modal-handle { display: none; }
+      .form-grid { gap: 14px; }
+    }
+
+    /* ══════════════════════════════
+       タブナビゲーション
+    ══════════════════════════════ */
+    .tab-nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      position: sticky;
+      top: 57px;
+      z-index: 40;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 13px 8px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--muted);
+      background: none;
+      border: none;
+      border-bottom: 2.5px solid transparent;
+      cursor: pointer;
+      letter-spacing: .04em;
+      transition: color .15s, border-color .15s;
+    }
+
+    .tab-btn.active {
+      color: var(--gold);
+      border-bottom-color: var(--gold);
+    }
+
+    .tab-section { display: none; }
+    .tab-section.active { display: block; }
+
+    /* ══════════════════════════════
+       本ギャラリー
+    ══════════════════════════════ */
+    .gallery-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 16px 60px;
+    }
+
+    /* ── 横書き統一（ギャラリー） ── */
+    .gallery-container { writing-mode: horizontal-tb; }
+
+    /* ── 統計バー ── */
+    .gallery-stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 14px 20px;
+      box-shadow: var(--shadow);
+      flex: 1;
+      min-width: 90px;
+      text-align: center;
+    }
+
+    .stat-num {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--gold);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: .04em;
+    }
+
+    /* ── ジャンルフィルター ── */
+    .gallery-filter {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      margin-bottom: 20px;
+      scrollbar-width: none;
+    }
+
+    .gallery-filter::-webkit-scrollbar { display: none; }
+
+    /* ── グリッド ── */
+    .book-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    @media (min-width: 480px) { .book-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 640px) { .book-grid { grid-template-columns: repeat(5, 1fr); } }
+    @media (min-width: 800px) { .book-grid { grid-template-columns: repeat(6, 1fr); } }
+
+    /* ── 本カード ── */
+    .book-card {
+      background: var(--surface);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      transition: box-shadow .18s, transform .18s;
+      animation: fadeUp .22s ease;
+    }
+
+    .book-card:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-3px);
+    }
+
+    /* 表紙エリア */
+    .book-cover {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ジャンル別グラデーション */
+    .book-cover.genre-psychology  { background: linear-gradient(145deg, #667eea, #764ba2); }
+    .book-cover.genre-business    { background: linear-gradient(145deg, #f093fb, #f5576c); }
+    .book-cover.genre-money       { background: linear-gradient(145deg, #4facfe, #00f2fe); }
+    .book-cover.genre-philosophy  { background: linear-gradient(145deg, #43e97b, #38f9d7); }
+    .book-cover.genre-lifestyle   { background: linear-gradient(145deg, #fa709a, #fee140); }
+    .book-cover.genre-career      { background: linear-gradient(145deg, #a18cd1, #fbc2eb); }
+    .book-cover.genre-thinking    { background: linear-gradient(145deg, #ffecd2, #fcb69f); }
+    .book-cover.genre-mental      { background: linear-gradient(145deg, #a1c4fd, #c2e9fb); }
+    .book-cover.genre-default     { background: linear-gradient(145deg, #d4b896, #c9a96e); }
+
+    .book-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .book-cover-emoji {
+      font-size: 2.4rem;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,.2));
+    }
+
+    /* 読了バッジ */
+    .book-read-badge {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      background: var(--green);
+      color: #fff;
+      font-size: 0.62rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 999px;
+      letter-spacing: .04em;
+    }
+
+    /* 本の情報 */
+    .book-info {
+      padding: 10px 10px 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .book-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .book-author {
+      font-size: 0.62rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .book-genre-badge {
+      display: inline-block;
+      font-size: 0.58rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #f0ede6;
+      color: #888;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    /* ── 空の状態 ── */
+    .gallery-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: #ccc;
+    }
+
+    .gallery-empty-icon {
+      font-size: 3.5rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .gallery-empty-text {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #bbb;
+      margin-bottom: 8px;
+    }
+
+    .gallery-empty-sub {
+      font-size: 0.8rem;
+      color: #ccc;
+      line-height: 1.7;
+    }
+
+    /* ── 本詳細モーダル ── */
+    .book-modal-cover {
+      width: 90px;
+      height: 135px;
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+    }
+
+    .book-modal-header {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+
+    .book-modal-meta { flex: 1; min-width: 0; }
+    .book-modal-title { font-size: 1.05rem; font-weight: 700; line-height: 1.4; margin-bottom: 6px; }
+    .book-modal-author { font-size: 0.82rem; color: var(--muted); margin-bottom: 8px; }
+    .book-modal-desc {
+      font-size: 0.85rem;
+      color: #555;
+      line-height: 1.7;
+      margin-bottom: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .book-modal-actions { display: flex; gap: 10px; }
+    .book-modal-actions .btn-map { flex: 1; }
+    .book-modal-actions .btn-youtube { flex: none; padding: 13px 16px; }
+
+    .book-modal-memo-wrap { margin-top: 12px; text-align: left; }
+    .book-modal-memo-wrap label { font-size: 0.78rem; font-weight: 600; color: var(--muted); display: block; margin-bottom: 6px; }
+    #bm-myReview {
+      width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px;
+      border: 1.5px solid var(--border); font-family: inherit; font-size: 0.88rem; resize: vertical; min-height: 72px;
+    }
+
+    .btn-read-toggle {
+      width: 100%;
+      padding: 13px;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 700;
+      border: 1.5px solid #b5e8d3;
+      background: var(--green-lt);
+      color: var(--green);
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background .15s, color .15s;
+    }
+
+    .btn-read-toggle.read {
+      background: var(--green);
+      color: #fff;
+      border-color: var(--green);
+    }
+
+    /* ── ジャンルグリッド ── */
+    .genre-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 16px;
+      align-items: start;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    /* ── ジャンルカード ── */
+    .acc-section {
+      display: flex;
+      flex-direction: column;
+      height: auto;
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--surface);
+      border-radius: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      border: 1px solid #ece8df;
+      overflow: visible;
+      position: relative;
+    }
+
+    /* ジャンル名ヘッダー */
+    .acc-header {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 14px;
+      width: 100%;
+      box-sizing: border-box;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid #f0ede6;
+      transition: background .15s;
+      border-radius: 14px 14px 0 0;
+    }
+    .acc-header:hover { background: #faf8f4; }
+
+    .acc-header-left {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .acc-title {
+      font-size: 0.88rem;
+      font-weight: 800;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .acc-header-right {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .acc-badge {
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: var(--green-lt);
+      color: var(--green);
+      white-space: nowrap;
+    }
+
+    .acc-arrow {
+      font-size: 0.6rem;
+      color: #bbb;
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+    .acc-arrow.open { transform: rotate(180deg); }
+
+    /* 本カードエリア */
+    .acc-body {
+      display: none;
+      padding: 12px 12px 14px;
+      box-sizing: border-box;
+      margin-bottom: 0;
+    }
+    .acc-body.open { display: block; }
+
+    .book-grid-inner {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    @media (min-width: 420px) { .book-grid-inner { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 560px) { .book-grid-inner { grid-template-columns: repeat(5, 1fr); } }
+    @media (min-width: 720px) { .book-grid-inner { grid-template-columns: repeat(6, 1fr); } }
+
+    .book-modal-recommender {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── 評価ボタン ── */
+    .rating-section { margin: 14px 0 4px; }
+    .rating-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: block;
+    }
+    .rating-btns {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .rating-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 4px;
+      border: 2px solid #e8e4de;
+      border-radius: 12px;
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 1.5rem;
+      line-height: 1;
+      transition: all .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .rating-btn span {
+      font-size: 0.6rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .rating-btn:hover { border-color: var(--accent); transform: scale(1.04); }
+    .rating-btn.active-5  { border-color: #f4c430; background: #fffbea; }
+    .rating-btn.active-3  { border-color: #5cb85c; background: #f0fff0; }
+    .rating-btn.active-1  { border-color: #f0ad4e; background: #fff8ee; }
+
+    /* ── スポットライトカード（1冊表示） ── */
+    .book-spotlight {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      box-sizing: border-box;
+      background: #faf8f4;
+      border-radius: 10px;
+      padding: 12px 10px;
+      cursor: pointer;
+      margin-bottom: 0;
+      transition: background .15s;
+    }
+    .book-spotlight:hover { background: #f3efe6; }
+    .book-spotlight-cover {
+      width: 72px;
+      min-width: 72px;
+      height: 100px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      position: relative;
+      font-size: 2rem;
+    }
+    .book-spotlight-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+    }
+    .book-spotlight-title {
+      font-size: 0.98rem;
+      font-weight: 800;
+      line-height: 1.5;
+      color: var(--text);
+      word-break: break-word;
+    }
+    .book-spotlight-author {
+      font-size: 0.79rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .book-spotlight-meta {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    /* すべて見るボタン */
+    .btn-see-all {
+      background: none;
+      border: 1px solid #ddd;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: border-color .15s, color .15s;
+      line-height: 1.6;
+    }
+    .btn-see-all:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-see-all.open  { border-color: var(--accent); color: var(--accent); background: #fdf6ee; }
+
+    /* ── おすすめセクション ── */
+    .rec-section {
+      background: linear-gradient(135deg, #fffbea 0%, #fff8dc 100%);
+      border: 2px solid #f4c430;
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 18px;
+    }
+    .rec-header {
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: #b8860b;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rec-reason {
+      font-size: 0.7rem;
+      color: #a07800;
+      background: rgba(255,255,255,0.6);
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+
+    /* カード・リストの評価バッジ */
+    .book-rating-dot {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      font-size: 0.85rem;
+      line-height: 1;
+    }
+    .book-cover { position: relative; }
+    .book-list-rating {
+      font-size: 1rem;
+      flex-shrink: 0;
+      margin-left: 2px;
+    }
+
+    /* ── トースト通知 ── */
+    #toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #2d2d2d;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s, transform .25s;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── バックアップボタン ── */
+    .backup-bar {
+      text-align: center;
+      padding: 12px 0 4px;
+    }
+    .btn-backup {
+      background: none;
+      border: 1.5px solid #ddd;
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-backup:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* サブジャンルバッジ */
+    .sub-genre-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.66rem;
+      font-weight: 600;
+      background: #f0ede6;
+      color: #999;
+      white-space: nowrap;
+      margin-top: 3px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="dot"></span>
+  <h1>おすすめリスト</h1>
+  <span id="sync-indicator" class="idle"></span>
+  <button id="btn-force-reload" onclick="forceReloadFromCloud()" title="クラウドから最新データを強制取得">🔄</button>
+</header>
+
+<!-- タブナビ -->
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('list', this)">📋 おすすめリスト</button>
+  <button class="tab-btn" onclick="switchTab('books', this)">📚 本のギャラリー</button>
+</nav>
+
+<!-- おすすめリストタブ -->
+<div class="tab-section active" id="tab-list">
+<div class="container">
+
+  <!-- 入力フォーム（折りたたみ式） -->
+  <div class="panel">
+    <button class="panel-toggle" id="formToggle" onclick="toggleForm()">
+      ＋ 新しく追加する
+      <span class="arrow">▼</span>
+    </button>
+    <div class="panel-body" id="formBody">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="category">カテゴリー</label>
+          <select id="category">
+            <option value="飲食店">飲食店</option>
+            <option value="居酒屋">居酒屋</option>
+            <option value="カフェ・バー">カフェ・バー</option>
+            <option value="本">本</option>
+            <option value="食べ物">食べ物</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="name">名前 *</label>
+          <input type="text" id="name" placeholder="例：新宿 〇〇" />
+        </div>
+        <div class="form-group">
+          <label for="recommender">勧めてくれた人</label>
+          <input type="text" id="recommender" placeholder="例：田中さん" />
+        </div>
+        <div class="form-group">
+          <label for="review">💬 紹介コメント（紹介者のひと言）</label>
+          <input type="text" id="review" placeholder="紹介者のおすすめポイントなど" />
+        </div>
+        <div class="form-group">
+          <label for="myReview">✍️ 自分の感想（行った後に記入）</label>
+          <input type="text" id="myReview" placeholder="実際に行った感想を書こう" />
+        </div>
+        <div class="form-group full">
+          <label for="address">住所</label>
+          <input type="text" id="address" placeholder="例：東京都渋谷区〇〇" />
+        </div>
+        <div class="form-group">
+          <label for="subGenre">ジャンル詳細</label>
+          <input type="text" id="subGenre" placeholder="例：ラーメン・そば・デザート" />
+        </div>
+        <div class="form-group full">
+          <label for="mapUrl">Google マップ / Amazon URL</label>
+          <input type="text" id="mapUrl" placeholder="https://goo.gl/maps/..." />
+        </div>
+        <div class="form-group full">
+          <label for="youtubeUrl">YouTube URL</label>
+          <input type="text" id="youtubeUrl" placeholder="https://youtu.be/..." />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-ghost" onclick="clearForm()">クリア</button>
+        <button class="btn-primary" onclick="addItem()">保存する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 検索バー -->
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input
+      class="search-input"
+      id="searchInput"
+      type="text"
+      placeholder="店名・住所・感想で検索…"
+      oninput="onSearch(this)"
+    />
+    <button class="search-clear" id="searchClear" onclick="clearSearch()" title="クリア">✕</button>
+  </div>
+
+  <!-- フィルター -->
+  <div class="filter-wrap">
+    <div class="filter-scroll" id="filters">
+      <span class="chip active" data-filter="すべて" onclick="setFilter(this)">すべて</span>
+      <span class="chip" data-filter="飲食店" onclick="setFilter(this)">飲食店</span>
+      <span class="chip" data-filter="居酒屋" onclick="setFilter(this)">居酒屋</span>
+      <span class="chip" data-filter="カフェ・バー" onclick="setFilter(this)">カフェ・バー</span>
+      <span class="chip" data-filter="本" onclick="setFilter(this)">本</span>
+      <span class="chip" data-filter="食べ物" onclick="setFilter(this)">食べ物</span>
+      <span class="chip" data-filter="その他" onclick="setFilter(this)">その他</span>
+      <span class="chip chip-visited" onclick="toggleVisitedFilter(this)">✓ 行った</span>
+    </div>
+    <div class="filter-meta">
+      <span class="count" id="count"></span>
+    </div>
+  </div>
+
+  <!-- カードリスト -->
+  <div id="list"></div>
+
+</div>
+
+  <div class="backup-bar">
+    <button class="btn-backup" onclick="exportData()">💾 データをバックアップ（JSONファイルに保存）</button>
+  </div>
+</div><!-- /.container -->
+</div><!-- /#tab-list -->
+
+<!-- 本のギャラリータブ -->
+<div class="tab-section" id="tab-books">
+  <div class="gallery-container">
+
+    <!-- 統計 -->
+    <div class="gallery-stats">
+      <div class="stat-card">
+        <div class="stat-num" id="stat-total">0</div>
+        <div class="stat-label">登録冊数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-read">0</div>
+        <div class="stat-label">読了</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-unread">0</div>
+        <div class="stat-label">未読</div>
+      </div>
+    </div>
+
+    <!-- ビュー切り替え -->
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-view-grid" onclick="setBookView('grid', this)" title="カード表示">⊞ カード</button>
+      <button class="view-btn"        id="btn-view-list" onclick="setBookView('list', this)" title="リスト表示">☰ リスト</button>
+    </div>
+
+    <!-- 本検索バー -->
+    <div class="search-wrap" style="margin-bottom:12px">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="book-search-input" type="search" placeholder="タイトル・著者名で検索…" oninput="onBookSearch(this)" />
+      <button class="search-clear" id="book-search-clear" onclick="clearBookSearch()" style="display:none">✕</button>
+    </div>
+
+    <!-- セクションフィルター -->
+    <div class="gallery-filter" id="book-filters">
+      <span class="chip active" data-bfilter="すべて" onclick="setBookFilter(this)">すべて</span>
+      <span class="chip" data-bfilter="思考法・ビジネスの基礎" onclick="setBookFilter(this)">思考法・ビジネス</span>
+      <span class="chip" data-bfilter="お金・経済・社会" onclick="setBookFilter(this)">お金・経済</span>
+      <span class="chip" data-bfilter="組織・リーダーシップ・戦略" onclick="setBookFilter(this)">組織・戦略</span>
+      <span class="chip" data-bfilter="時間術・マインドセット・教養" onclick="setBookFilter(this)">時間術・教養</span>
+      <span class="chip" data-bfilter="哲学・心理学・生き方" onclick="setBookFilter(this)">哲学・生き方</span>
+      <span class="chip chip-visited" onclick="setBookFilter(this)" data-bfilter="読了">✓ 読了のみ</span>
+      <span class="chip chip-visited" onclick="setBookFilter(this)" data-bfilter="未読" style="background:#e8f4fd;color:#1a6fa8">📖 未読のみ</span>
+    </div>
+
+    <!-- 本グリッド -->
+    <div class="book-grid" id="book-grid"></div>
+
+    <div class="backup-bar" style="padding-top:16px">
+      <button class="btn-backup" onclick="exportData()">💾 データをバックアップ（JSONファイルに保存）</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- 本詳細モーダル -->
+<div class="modal-overlay" id="bookModal" onclick="handleBookOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="book-modal-header">
+      <div class="book-modal-cover" id="bm-cover"></div>
+      <div class="book-modal-meta">
+        <div class="book-modal-title" id="bm-title"></div>
+        <div class="book-modal-author" id="bm-author"></div>
+        <span class="book-genre-badge" id="bm-genre"></span>
+      </div>
+    </div>
+    <div class="book-modal-desc" id="bm-desc"></div>
+    <div class="book-modal-actions">
+      <a class="btn-map" id="bm-amazon" href="#" target="_blank" rel="noopener" style="background:#e47911;">📚 Amazon で見る</a>
+      <a class="btn-youtube" id="bm-youtube" href="#" target="_blank" rel="noopener">▶</a>
+    </div>
+    <!-- 評価ボタン -->
+    <div class="rating-section">
+      <span class="rating-label">📊 この本の評価</span>
+      <div class="rating-btns">
+        <button class="rating-btn" id="rbtn-5"  onclick="setBookRating(5)">🌟<span>すごく<br>よかった</span></button>
+        <button class="rating-btn" id="rbtn-3"  onclick="setBookRating(3)">🙂<span>よかった</span></button>
+        <button class="rating-btn" id="rbtn-1"  onclick="setBookRating(1)">🤔<span>イマイチ</span></button>
+      </div>
+    </div>
+    <div class="book-modal-memo-wrap">
+      <label for="bm-myReview">✍️ 読書メモ・感想（スマホと同期）</label>
+      <textarea id="bm-myReview" placeholder="読んだ感想など" onblur="onBookMyReviewBlur()"></textarea>
+    </div>
+    <button class="btn-read-toggle" id="bm-read-btn" onclick="toggleBookRead()"></button>
+  </div>
+</div>
+
+<!-- トースト -->
+<div id="toast"></div>
+
+<!-- 編集モーダル（下から出るシート） -->
+<div class="modal-overlay" id="editModal" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <p class="modal-title">編集</p>
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="edit-category">カテゴリー</label>
+        <select id="edit-category">
+          <option value="飲食店">飲食店</option>
+          <option value="居酒屋">居酒屋</option>
+          <option value="カフェ・バー">カフェ・バー</option>
+          <option value="本">本</option>
+          <option value="食べ物">食べ物</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit-name">名前 *</label>
+        <input type="text" id="edit-name" />
+      </div>
+      <div class="form-group">
+        <label for="edit-recommender">勧めてくれた人</label>
+        <input type="text" id="edit-recommender" />
+      </div>
+      <div class="form-group">
+        <label for="edit-myReview">✍️ 自分の感想</label>
+        <input type="text" id="edit-myReview" placeholder="実際に行った感想を書こう" />
+      </div>
+      <div class="form-group">
+        <label for="edit-subGenre">ジャンル詳細</label>
+        <input type="text" id="edit-subGenre" placeholder="例：ラーメン・そば・デザート" />
+      </div>
+      <div class="form-group full">
+        <label for="edit-address">住所</label>
+        <input type="text" id="edit-address" />
+      </div>
+      <div class="form-group full">
+        <label for="edit-mapUrl">Google マップ / Amazon URL</label>
+        <input type="text" id="edit-mapUrl" />
+      </div>
+      <div class="form-group full">
+        <label for="edit-youtubeUrl">YouTube URL</label>
+        <input type="text" id="edit-youtubeUrl" placeholder="https://youtu.be/..." />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeEditModal()">キャンセル</button>
+      <button class="btn-primary" onclick="saveEdit()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ─── 初期シードデータ（渋谷グルメ TOP10）─── */
+  const SEED_KEY = 'osusume_seeded_v15';
+  const gm = (n, a) => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n + ' ' + a);
+  const SEED_DATA = [
+    { id:1000001, category:'居酒屋',    name:'産直屋 たか',                          recommender:'真子さん動画（渋谷グルメTOP10 第1位）',  review:'おまかせコース（ししゃも、骨抜きさんまの一夜干しなど）。完全予約制。',              address:'東京都渋谷区円山町12-2 ライオンズマンション渋谷 1F', mapUrl:gm('産直屋 たか','東京都渋谷区円山町12-2'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000002, category:'飲食店',    name:'麺の坊 砦（とりで）',                  recommender:'真子さん動画（渋谷グルメTOP10 第2位）',  review:'肉もやしラーメン。細麺・バリカタがおすすめ。とんこつ系。',                        address:'東京都渋谷区神泉町20-23',                           mapUrl:gm('麺の坊 砦','東京都渋谷区神泉町20-23'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000003, category:'居酒屋',    name:'魚さん亭（ぎょさんてい）',             recommender:'真子さん動画（渋谷グルメTOP10 第3位）',  review:'チキン南蛮、冷や汁、どんこしいたけ、肉詰めピーマン。宮崎料理・居酒屋。',           address:'東京都渋谷区道玄坂2-23-12 フォンティスビル 2F',     mapUrl:gm('魚さん亭','東京都渋谷区道玄坂2-23-12'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000004, category:'飲食店',    name:'レンゲノゴトク',                       recommender:'真子さん動画（渋谷グルメTOP10 第4位）',  review:'パイクー担々麺（豚肉の揚げ物が乗った担々麺）。',                                  address:'東京都渋谷区桜丘町16-7 鈴木ビル 1F',                mapUrl:gm('レンゲノゴトク','東京都渋谷区桜丘町16-7'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000005, category:'居酒屋',    name:'富士屋本店 ワインバー',                recommender:'真子さん動画（渋谷グルメTOP10 第5位）',  review:'ポテトサラダ、香草ボンバー（サラダ）、鴨もも肉のコンフィ。立ち飲みビストロ。',    address:'東京都渋谷区桜丘町24-4 第5富士商事ビル 1F',         mapUrl:gm('富士屋本店','東京都渋谷区桜丘町24-4'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000006, category:'カフェ・バー', name:'Goodbeer FAUCETS（グッドビア ファウセッツ）', recommender:'真子さん動画（渋谷グルメTOP10 第6位）', review:'各種クラフトビール、スモーク枝豆、クリームチーズの醤油漬け。',             address:'東京都渋谷区松濤1-29-1 クロスロードビル 2F',         mapUrl:gm('Goodbeer FAUCETS','東京都渋谷区松濤1-29-1'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000007, category:'居酒屋',    name:'ホルモンクラブ 味倉（あじくら）',      recommender:'真子さん動画（渋谷グルメTOP10 第7位）',  review:'厚切りタン、壺漬けカルビ、スリランカカレー（気まぐれメニュー）。焼肉・ホルモン。', address:'東京都渋谷区桜丘町7-12',                            mapUrl:gm('ホルモンクラブ 味倉','東京都渋谷区桜丘町7-12'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000008, category:'飲食店',    name:'かつ吉 渋谷店',                        recommender:'真子さん動画（渋谷グルメTOP10 第8位）',  review:'ヒレかつ、カキフライ（冬季限定）、エビフライ。',                                  address:'東京都渋谷区渋谷3-9-10 KDC渋谷ビル B1F',           mapUrl:gm('かつ吉 渋谷店','東京都渋谷区渋谷3-9-10'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000009, category:'カフェ・バー', name:'フグレン トウキョウ（Fuglen Tokyo）',  recommender:'真子さん動画（渋谷グルメTOP10 第9位）',  review:'本日のコーヒー（浅煎りのフルーティーなコーヒー）、カフェラテ。',                  address:'東京都渋谷区富ヶ谷1-16-11',                         mapUrl:gm('Fuglen Tokyo','東京都渋谷区富ヶ谷1-16-11'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000010, category:'飲食店',    name:'麺飯食堂 なかじま',                    recommender:'真子さん動画（渋谷グルメTOP10 第10位）', review:'酢豚（角煮のようにトロトロなバラ肉）、回鍋肉。町中華。',                          address:'東京都渋谷区渋谷3-18-7',                            mapUrl:gm('麺飯食堂 なかじま','東京都渋谷区渋谷3-18-7'), youtubeUrl:'https://youtu.be/e619aCsfsXg?si=_IYBW0hNeMnNGNWm', visited:false, date:'3月19日' },
+    { id:1000011, category:'カフェ・バー', name:'ラトリエ アマファソン（L\'atelier à ma façon）', recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第1位）', review:'季節の芸術的なパフェ（旬のフルーツを使用）。パフェ・デザート専門店。',           address:'東京都世田谷区上野毛1-26-14',                       mapUrl:gm('ラトリエ アマファソン','東京都世田谷区上野毛1-26-14'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000012, category:'飲食店',    name:'ピーター・ルーガー・ステーキハウス 東京',          recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第2位）', review:'Tボーンステーキ、ピーカンナッツのパイ。熟成肉ステーキの名店。',                  address:'東京都渋谷区恵比寿4-19-19',                         mapUrl:gm('ピーター・ルーガー・ステーキハウス 東京','東京都渋谷区恵比寿4-19-19'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000013, category:'飲食店',    name:'ラーメン うさぎ',                                 recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第3位）', review:'担々麺（痺れが効いた濃厚スープ）。',                                              address:'東京都渋谷区神泉町8-13',                            mapUrl:gm('ラーメン うさぎ','東京都渋谷区神泉町8-13'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000014, category:'飲食店',    name:'シバカリワラ（Shiba Curry Wara）',                recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第4位）', review:'バターチキンカレー、スパイスレモンサワー。インド料理・スパイスカレー。',         address:'東京都世田谷区太子堂4-28-6 2F',                     mapUrl:gm('Shiba Curry Wara','東京都世田谷区太子堂4-28-6'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000015, category:'飲食店',    name:'エビつけ麺 五ノ神製作所',                        recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第5位）', review:'エビつけ麺（トッピングはキャベツが必須）。',                                      address:'東京都渋谷区千駄ヶ谷5-14-10 新宿明治安田ビル 1F',  mapUrl:gm('エビつけ麺 五ノ神製作所','東京都渋谷区千駄ヶ谷5-14-10'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000016, category:'カフェ・バー', name:'IVY PLACE（アイビープレイス）',               recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第6位）', review:'パンケーキ コンボ プレート（朝食が特におすすめ）。カフェ・ダイニング。',         address:'東京都渋谷区猿楽町16-15 DAIKANYAMA T-SITE',        mapUrl:gm('IVY PLACE','東京都渋谷区猿楽町16-15'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000017, category:'カフェ・バー', name:'ニューヨーク バー（パーク ハイアット 東京）',  recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第7位）', review:'シャンパン、各種カクテル。夜景と生演奏が最高。ホテルバー・ジャズバー。',         address:'東京都新宿区西新宿3-7-1-2 パーク ハイアット 東京 52F', mapUrl:gm('ニューヨーク バー パーク ハイアット 東京','東京都新宿区西新宿3-7-1-2'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000018, category:'飲食店',    name:'欧風カレー ボンディ（Bondy）神保町本店',         recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第8位）', review:'ビーフカレー（辛口）、焼きリンゴ。欧風カレーの名店。',                          address:'東京都千代田区神田神保町2-3 神田古書センター 2F',   mapUrl:gm('欧風カレー ボンディ','東京都千代田区神田神保町2-3'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000019, category:'カフェ・バー', name:'スターバックス リザーブ ロースタリー 東京',   recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第9位）', review:'キネマ カプチーノ、エスプレッソ マティーニ。高級スタバ。',                     address:'東京都目黒区青葉台2-19-23',                         mapUrl:gm('スターバックス リザーブ ロースタリー 東京','東京都目黒区青葉台2-19-23'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+    { id:1000020, category:'飲食店',    name:'シャングリラズ シークレット（Shangri-La\'s secret）', recommender:'真子さん動画（東京旅行で絶対行くべき場所TOP10 第10位）', review:'ブラックスープ（数十種類のキノコを煮込んだ出汁）のコース。キノコしゃぶしゃぶ専門店。', address:'東京都港区北青山3-14-3 オーキッドレジデンス青山 B1F', mapUrl:gm('シャングリラズ シークレット','東京都港区北青山3-14-3'), youtubeUrl:'https://youtu.be/INF1cFLtLRc?si=2ux-y242rCvg7xDY', visited:false, date:'3月19日' },
+
+    /* ── 友人おすすめ ── */
+    { id:3001, category:'居酒屋',   subGenre:'バー・居酒屋', name:'めしや ヒロキ倶楽部 新宿', recommender:'宮本 香奈江', review:'', address:'東京都新宿区西新宿7-12-24', mapUrl:gm('めしや ヒロキ倶楽部 新宿','東京都新宿区西新宿7-12-24'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3002, category:'居酒屋',   subGenre:'バー・居酒屋', name:'BRIANZA TOKYO', recommender:'駒井 翼', review:'', address:'東京都千代田区大手町2-6-4', mapUrl:gm('BRIANZA TOKYO','東京都千代田区大手町2-6-4'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3003, category:'カフェ・バー', subGenre:'クラフトビール', name:'CRAFT BEER MARKET TOKYO', recommender:'駒井 翼', review:'', address:'東京都千代田区大手町2-6-4', mapUrl:gm('CRAFT BEER MARKET TOKYO','東京都千代田区大手町2-6-4'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3004, category:'飲食店',   subGenre:'焼き鳥', name:'大好き焼き鳥', recommender:'原田 聡', review:'浦安駅から徒歩1分、目の前で焼く焼き鳥は絶品。つくねゴレンジャーがおすすめ！', address:'千葉県浦安市北栄1-12-50', mapUrl:gm('大好き焼き鳥','千葉県浦安市北栄1-12-50'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3005, category:'居酒屋',   subGenre:'バー・居酒屋', name:'みやこんじょ', recommender:'工藤 拓馬', review:'', address:'東京都新宿区歌舞伎町1-12-9', mapUrl:gm('みやこんじょ','東京都新宿区歌舞伎町1-12-9'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3006, category:'居酒屋',   subGenre:'日本酒', name:'まる酒 柏の葉店', recommender:'工藤 拓馬', review:'', address:'千葉県柏市若柴184-1', mapUrl:gm('まる酒 柏の葉店','千葉県柏市若柴184-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3007, category:'飲食店',   subGenre:'焼き鳥', name:'いせや総本店', recommender:'山元 直輝', review:'', address:'東京都武蔵野市御殿山1-2-1', mapUrl:gm('いせや総本店','東京都武蔵野市御殿山1-2-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3008, category:'居酒屋',   subGenre:'日本酒', name:'にほん酒や', recommender:'山元 直輝', review:'', address:'東京都武蔵野市吉祥寺本町2-7-13', mapUrl:gm('にほん酒や','東京都武蔵野市吉祥寺本町2-7-13'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3009, category:'カフェ・バー', subGenre:'ワイン', name:'RIGOLETTO KITCHEN', recommender:'山口 裕士', review:'', address:'東京都中央区銀座8-2-1', mapUrl:gm('RIGOLETTO KITCHEN','東京都中央区銀座8-2-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3010, category:'カフェ・バー', subGenre:'ワイン', name:'銀座でワイン。', recommender:'山口 裕士', review:'', address:'東京都中央区銀座3-9-6', mapUrl:gm('銀座でワイン。','東京都中央区銀座3-9-6'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3011, category:'飲食店',   subGenre:'イタリアン', name:'Inf 隅田川イタリアン 蔵前店', recommender:'小島 佳津子', review:'', address:'東京都台東区駒形2-1-13', mapUrl:gm('Inf 隅田川イタリアン 蔵前店','東京都台東区駒形2-1-13'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3012, category:'飲食店',   subGenre:'寿司', name:'鮨 一海（ひとみ）', recommender:'小島 佳津子', review:'', address:'千葉県木更津市富士見3-5-11', mapUrl:gm('鮨 一海','千葉県木更津市富士見3-5-11'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3013, category:'飲食店',   subGenre:'すき焼き', name:'田園', recommender:'小島 佳津子', review:'', address:'千葉県木更津市富士見2-3-31', mapUrl:gm('田園','千葉県木更津市富士見2-3-31'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3014, category:'居酒屋',   subGenre:'バー・居酒屋', name:'宝家', recommender:'小島 佳津子', review:'', address:'千葉県木更津市中央2-3-4', mapUrl:gm('宝家','千葉県木更津市中央2-3-4'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3015, category:'飲食店',   subGenre:'寿司', name:'ダイニングまさ坊', recommender:'青山 大輝', review:'', address:'群馬県太田市藪塚町1111-1', mapUrl:gm('ダイニングまさ坊','群馬県太田市藪塚町1111-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3016, category:'カフェ・バー', subGenre:'デザート', name:'Balcony by 6th', recommender:'青山 大輝', review:'', address:'東京都港区麻布台1-3-1', mapUrl:gm('Balcony by 6th','東京都港区麻布台1-3-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3017, category:'飲食店',   subGenre:'寿司', name:'立食い寿司 根室花まる 新橋店', recommender:'青山 大輝', review:'ロースターで炙る「炙りサーモン」は唯一無二の味。', address:'東京都港区新橋2-17-14', mapUrl:gm('立食い寿司 根室花まる 新橋店','東京都港区新橋2-17-14'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3018, category:'飲食店',   subGenre:'寿司・魚料理', name:'わらべ菜魚洞', recommender:'青山 大輝', review:'至高のアジフライとアブラボウズの煮付けは必食。', address:'神奈川県小田原市早川1-5-4', mapUrl:gm('わらべ菜魚洞','神奈川県小田原市早川1-5-4'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3019, category:'飲食店',   subGenre:'寿司・魚料理', name:'こじまわらべ', recommender:'青山 大輝', review:'わらべの2号店。カップルシートあり。', address:'神奈川県小田原市早川1-13-18', mapUrl:gm('こじまわらべ','神奈川県小田原市早川1-13-18'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3020, category:'カフェ・バー', subGenre:'デザート', name:'いでぼく', recommender:'青山 大輝', review:'唯一ここだけジェラートがある（他店はソフトのみ）。', address:'海老名SA（下り）', mapUrl:gm('いでぼく','海老名SA'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3021, category:'カフェ・バー', subGenre:'デザート', name:'ZUND-BAR', recommender:'青山 大輝', review:'AFURIの本店。マダガスカル産バニラのアイスが至高。', address:'神奈川県厚木市七沢1954-7', mapUrl:gm('ZUND-BAR','神奈川県厚木市七沢1954-7'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3022, category:'カフェ・バー', subGenre:'デザート', name:'とっとり･おかやま 新橋館', recommender:'青山 大輝', review:'鳥取名物「白バラコーヒー」のソフトクリーム。', address:'東京都港区新橋2-11-7', mapUrl:gm('とっとり おかやま 新橋館','東京都港区新橋2-11-7'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3023, category:'カフェ・バー', subGenre:'デザート', name:'teal', recommender:'青山 大輝', review:'濃厚なチョコのアイス。', address:'東京都中央区日本橋兜町1-10', mapUrl:gm('teal','東京都中央区日本橋兜町1-10'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3024, category:'カフェ・バー', subGenre:'デザート', name:'アクオリーナ', recommender:'青山 大輝', review:'オリーブオイル味など変わったジェラートが楽しめる。', address:'東京都目黒区五本木1-11-10', mapUrl:gm('アクオリーナ','東京都目黒区五本木1-11-10'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3025, category:'カフェ・バー', subGenre:'デザート', name:'バニラビーンズ みなとみらい', recommender:'青山 大輝', review:'これより美味しいカカオアイスに出会ったことがない。', address:'横浜市中区海岸通5-25-2', mapUrl:gm('バニラビーンズ みなとみらい','横浜市中区海岸通5-25-2'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3026, category:'カフェ・バー', subGenre:'デザート', name:'箱根焙煎珈琲', recommender:'青山 大輝', review:'箱根湯本に行ったら外せないコーヒーアイス。', address:'神奈川県足柄下郡箱根町湯本702', mapUrl:gm('箱根焙煎珈琲','神奈川県足柄下郡箱根町湯本702'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3027, category:'飲食店',   subGenre:'そば', name:'茅ヶ崎 そば処 榮家', recommender:'青山 大輝', review:'石焼鴨せいろが絶品。鴨肉が柔らかく臭みゼロ。', address:'神奈川県茅ヶ崎市香川4-11-14', mapUrl:gm('そば処 榮家','神奈川県茅ヶ崎市香川4-11-14'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3028, category:'飲食店',   subGenre:'そば', name:'SOUSAKU 28', recommender:'青山 大輝', review:'雰囲気、味、ボリュームすべてが最高。', address:'長野県長野市鶴賀上千歳町1352-5', mapUrl:gm('SOUSAKU 28','長野県長野市鶴賀上千歳町1352-5'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3029, category:'飲食店',   subGenre:'そば', name:'川上庵', recommender:'青山 大輝', review:'くるみ胡麻だれがおすすめ。サイドメニューも高評価。', address:'東京都港区北青山2-14-4', mapUrl:gm('川上庵','東京都港区北青山2-14-4'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3030, category:'飲食店',   subGenre:'そば', name:'国分寺そば', recommender:'青山 大輝', review:'イチオシは親子丼。天ぷらや豆腐料理も人気。', address:'神奈川県海老名市国分南1-8-35', mapUrl:gm('国分寺そば','神奈川県海老名市国分南1-8-35'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3031, category:'飲食店',   subGenre:'イタリアン', name:'ダ ミケーレ 恵比寿', recommender:'青山 大輝', review:'恵比寿と横浜にある超有名ピザ屋。', address:'東京都渋谷区恵比寿4-4-7', mapUrl:gm('ダ ミケーレ 恵比寿','東京都渋谷区恵比寿4-4-7'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3032, category:'飲食店',   subGenre:'和食', name:'日本橋海鮮丼 つじ半', recommender:'青山 大輝', review:'', address:'東京都中央区日本橋3-1-15', mapUrl:gm('日本橋海鮮丼 つじ半','東京都中央区日本橋3-1-15'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3033, category:'飲食店',   subGenre:'和食', name:'小田原おでん', recommender:'青山 大輝', review:'牛すじ丼がイチオシ。ミナカ小田原店もおすすめ。', address:'神奈川県小田原市浜町3-11-30', mapUrl:gm('小田原おでん','神奈川県小田原市浜町3-11-30'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3034, category:'飲食店',   subGenre:'和食', name:'はなだこ', recommender:'青山 大輝', review:'ソース味ベースのネギマヨたこ焼きが最高。', address:'大阪市北区角田町9-16', mapUrl:gm('はなだこ','大阪市北区角田町9-16'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3035, category:'飲食店',   subGenre:'天ぷら', name:'金子半之助', recommender:'青山 大輝', review:'天丼がイチオシ。タレがとにかく美味しい。', address:'JR東京駅構内1F', mapUrl:gm('金子半之助','JR東京駅構内'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3036, category:'カフェ・バー', subGenre:'パン', name:'イケダヤマ', recommender:'青山 大輝', review:'トリュフ香るメロンパンが人気。1人3個まで。', address:'東京都品川区東五反田5-10-18', mapUrl:gm('イケダヤマ','東京都品川区東五反田5-10-18'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3037, category:'カフェ・バー', subGenre:'パン', name:'月島久栄', recommender:'青山 大輝', review:'22時まで出来立てが食べられるメロンパン専門店。', address:'東京都中央区月島1-21-3', mapUrl:gm('月島久栄','東京都中央区月島1-21-3'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3038, category:'カフェ・バー', subGenre:'デザート', name:'パティスリーテンアン', recommender:'青山 大輝', review:'シュークリームが至高。注文後にクリーム注入。', address:'東京都千代田区内幸町1-7-1', mapUrl:gm('パティスリーテンアン','東京都千代田区内幸町1-7-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3039, category:'カフェ・バー', subGenre:'デザート', name:'西鎌倉 レ・シュー', recommender:'青山 大輝', review:'プリンが最高。一度閉店したが熱望により復活。', address:'神奈川県鎌倉市西鎌倉1-1-10', mapUrl:gm('レ・シュー','神奈川県鎌倉市西鎌倉1-1-10'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3040, category:'飲食店',   subGenre:'中華', name:'ニューイザカヤ カノウ', recommender:'青山 大輝', review:'人生で一番好きな唐揚げ。チリマヨソースがおすすめ。', address:'神奈川県茅ヶ崎市元町4-5', mapUrl:gm('ニューイザカヤ カノウ','神奈川県茅ヶ崎市元町4-5'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3041, category:'飲食店',   subGenre:'ラーメン', name:'麺屋 彩音~Sign~', recommender:'青山 大輝', review:'ミスチル愛に溢れる店。淡麗系醤油が格別。', address:'東京都品川区西五反田2-18-3', mapUrl:gm('麺屋 彩音','東京都品川区西五反田2-18-3'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3042, category:'飲食店',   subGenre:'ラーメン', name:'裏大輝家 青物横丁店', recommender:'青山 大輝', review:'醤油のキレが抜群な家系。ライスおかわり自由。', address:'東京都品川区南品川5-4-5', mapUrl:gm('裏大輝家 青物横丁店','東京都品川区南品川5-4-5'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3043, category:'飲食店',   subGenre:'ラーメン', name:'寿々家', recommender:'青山 大輝', review:'クリーミーな家系。ライスとの相性が抜群。', address:'横浜市保土ケ谷区上星川2-3-1', mapUrl:gm('寿々家','横浜市保土ケ谷区上星川2-3-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3044, category:'飲食店',   subGenre:'ラーメン', name:'味噌っ子ふっく', recommender:'青山 大輝', review:'味噌ラーメンのイチオシ。荻窪の名店。', address:'東京都杉並区上荻2-40-11', mapUrl:gm('味噌っ子ふっく','東京都杉並区上荻2-40-11'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3045, category:'飲食店',   subGenre:'ラーメン', name:'拉麺大公', recommender:'青山 大輝', review:'味噌ラーメンのイチオシ。カップ麺にもなる人気店。', address:'横浜市南区南太田1-8-24', mapUrl:gm('拉麺大公','横浜市南区南太田1-8-24'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3046, category:'飲食店',   subGenre:'ラーメン', name:'麺や鐙', recommender:'青山 大輝', review:'真鯛×豚骨。鎧ラーメンの太麺、味濃いめが最強。', address:'神奈川県茅ヶ崎市東海岸南1-3-31', mapUrl:gm('麺や鐙','神奈川県茅ヶ崎市東海岸南1-3-31'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3047, category:'飲食店',   subGenre:'ラーメン', name:'麺屋ようすけ 本店', recommender:'青山 大輝', review:'佐野ラーメンの個人的頂点。醤油一択！', address:'栃木県佐野市田島町232', mapUrl:gm('麺屋ようすけ 本店','栃木県佐野市田島町232'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3048, category:'飲食店',   subGenre:'ラーメン', name:'らーめん飛粋', recommender:'青山 大輝', review:'上品な家系ラーメン。蒲田駅近でアクセスも良好。', address:'東京都大田区蒲田5-2-5', mapUrl:gm('らーめん飛粋','東京都大田区蒲田5-2-5'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3049, category:'飲食店',   subGenre:'ラーメン', name:'横浜家系 まんぷく家', recommender:'青山 大輝', review:'', address:'愛知県岡崎市井田南町2-2', mapUrl:gm('横浜家系 まんぷく家','愛知県岡崎市井田南町2-2'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3050, category:'飲食店',   subGenre:'とんかつ', name:'厚切りとんかつ 厚とん', recommender:'青山 大輝', review:'釜炊きご飯とトンカツ。塩かニンニク醤油で。', address:'東京都品川区東五反田3-16-44', mapUrl:gm('厚切りとんかつ 厚とん','東京都品川区東五反田3-16-44'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3051, category:'飲食店',   subGenre:'ハンバーガー', name:'JB\'S TOKYO', recommender:'青山 大輝', review:'', address:'東京都渋谷区代々木1-33-3', mapUrl:gm('JB\'S TOKYO','東京都渋谷区代々木1-33-3'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3052, category:'飲食店',   subGenre:'ハンバーガー', name:'BRISK STAND', recommender:'青山 大輝', review:'', address:'東京都千代田区神田三崎町1-4-6', mapUrl:gm('BRISK STAND','東京都千代田区神田三崎町1-4-6'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3053, category:'居酒屋',   subGenre:'日本酒', name:'かんだ光壽', recommender:'帯野 誠明', review:'', address:'東京都千代田区鍛冶町2-9-7', mapUrl:gm('かんだ光壽','東京都千代田区鍛冶町2-9-7'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3054, category:'カフェ・バー', subGenre:'バー', name:'BAR 十誡', recommender:'渡辺 瑶一郎', review:'', address:'東京都中央区銀座5-1-8', mapUrl:gm('BAR 十誡','東京都中央区銀座5-1-8'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3055, category:'カフェ・バー', subGenre:'パン', name:'KISO', recommender:'畑原 奈美', review:'', address:'名古屋市昭和区広見町1-7', mapUrl:gm('KISO','名古屋市昭和区広見町1-7'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3056, category:'居酒屋',   subGenre:'バー・居酒屋', name:'レストラン・バー コーヨー', recommender:'福本 浩大', review:'', address:'千葉県袖ケ浦市奈良輪107', mapUrl:gm('レストラン・バー コーヨー','千葉県袖ケ浦市奈良輪107'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3057, category:'居酒屋',   subGenre:'バー・居酒屋', name:'だいだらぼっち 二の坊', recommender:'柳澤 翔', review:'馬刺しや野沢菜がビールと「結婚」してました。', address:'長野県長野市南千歳1-14-1', mapUrl:gm('だいだらぼっち 二の坊','長野県長野市南千歳1-14-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3058, category:'飲食店',   subGenre:'ラーメン', name:'麺屋 星花灯', recommender:'林 葉瑠岐', review:'元イタリアンシェフが作る超美味ラーメン。', address:'千葉県香取市阿玉川124-1', mapUrl:gm('麺屋 星花灯','千葉県香取市阿玉川124-1'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3059, category:'カフェ・バー', subGenre:'バー', name:'Bar クロス', recommender:'林 葉瑠岐', review:'おすすめのウイスキーバー。', address:'東京都豊島区西池袋3-29-3', mapUrl:gm('Bar クロス','東京都豊島区西池袋3-29-3'), youtubeUrl:'', visited:false, date:'3月19日' },
+    { id:3060, category:'飲食店',   subGenre:'焼肉', name:'焼うお いし川 六本木', recommender:'柳谷 雅寛', review:'', address:'東京都港区六本木6-2-6', mapUrl:gm('焼うお いし川 六本木','東京都港区六本木6-2-6'), youtubeUrl:'', visited:false, date:'3月19日' },
+
+    /* ── 博多旅行 TOP10 ── */
+    { id:4001, category:'飲食店',   subGenre:'天ぷら',  name:'天麩羅処 ひらお',                              recommender:'真子さん動画（博多旅行TOP10 第1位）',  review:'1,000円前後の定食で揚げたてが次々来る体験は衝撃。ピーマンの甘さにも注目。',                                           address:'福岡市', mapUrl:gm('天麩羅処 ひらお','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4002, category:'飲食店',   subGenre:'うどん',  name:'牧のうどん',                                   recommender:'真子さん動画（博多旅行TOP10 第2位）',  review:'「スープを吸い続ける」魔法のうどん。小さなヤカンに入った追加スープを注ぎ足しながら食べるのが醍醐味。',                 address:'福岡市', mapUrl:gm('牧のうどん','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4003, category:'飲食店',   subGenre:'ラーメン', name:'博多 元気いっぱい!!',                          recommender:'真子さん動画（博多旅行TOP10 第3位）',  review:'看板のない名店。スープはもはやクリーミーな「ポタージュ」。初めて食べる人は間違いなく衝撃を受ける味。',               address:'福岡市', mapUrl:gm('博多 元気いっぱい','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4004, category:'飲食店',   subGenre:'うなぎ',  name:'吉塚うなぎ屋',                                 recommender:'真子さん動画（博多旅行TOP10 第4位）',  review:'150年続く老舗。関西風の「直火焼き」で表面はクレームブリュレのようにパリッパリ、中はふわふわ。',                       address:'福岡市', mapUrl:gm('吉塚うなぎ屋','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4005, category:'カフェ・バー', subGenre:'バー', name:'ON THE DECK Bar lounge（WITH THE STYLE内）',   recommender:'真子さん動画（博多旅行TOP10 第5位）',  review:'日本一かっこいいかもしれない、プールサイドのセクシーなバー。和モダンな雰囲気が最高。',                                 address:'福岡市', mapUrl:gm('ON THE DECK Bar lounge WITH THE STYLE 福岡','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4006, category:'飲食店',   subGenre:'ラーメン', name:'元祖 長浜屋',                                  recommender:'真子さん動画（博多旅行TOP10 第6位）',  review:'店員さんの数が尋常じゃない。400円時代からの中毒性は健在。',                                                           address:'福岡市', mapUrl:gm('元祖 長浜屋','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4007, category:'飲食店',   subGenre:'もつ鍋',  name:'博多 もつ鍋 やま中',                           recommender:'真子さん動画（博多旅行TOP10 第7位）',  review:'10年連続1位の王者。スープを飲んだ瞬間「鳥肌が立つ」ほどの旨味。',                                                      address:'福岡市', mapUrl:gm('博多 もつ鍋 やま中','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4008, category:'飲食店',   subGenre:'ラーメン', name:'博多一双',                                     recommender:'真子さん動画（博多旅行TOP10 第8位）',  review:'「豚骨カプチーノ」と称される泡立つスープ。王道かつ極まった博多ラーメン。',                                             address:'福岡市', mapUrl:gm('博多一双','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4009, category:'カフェ・バー', subGenre:'バー', name:'バー フィズ（グランド ハイアット 福岡内）',     recommender:'真子さん動画（博多旅行TOP10 第9位）',  review:'キャナルシティの噴水ショーを目の前で見られる特等席。休憩に最適。',                                                      address:'福岡市', mapUrl:gm('バー フィズ グランド ハイアット 福岡','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+    { id:4010, category:'飲食店',   subGenre:'海鮮',    name:'博多 ごま鯖屋',                                recommender:'真子さん動画（博多旅行TOP10 第10位）', review:'新鮮なゴマサバ。最後はお茶漬けにして締めるのが圧倒的に美味しい。',                                                      address:'福岡市', mapUrl:gm('博多 ごま鯖屋','福岡市'), youtubeUrl:'https://www.youtube.com/watch?v=EqCWipd6kg4', visited:false, date:'3月19日' },
+
+    /* ── タイ旅行 TOP5 ── */
+    { id:5001, category:'カフェ・バー', subGenre:'バー',    name:'シロッコ（Sirocco）',            recommender:'真子さん動画（タイ旅行TOP5 第1位）', review:'映画の舞台にもなった世界的に有名なバー。超高層階からの夜景は「人生で一番」と言えるほどの衝撃。バンコクに来たら絶対に行くべき聖地。', address:'1055 Si Lom, Silom, Bang Rak, Bangkok（Lebua State Tower 63F）', mapUrl:gm('Sirocco Bangkok','Lebua State Tower Bangkok'), youtubeUrl:'https://www.youtube.com/watch?v=vYI9OaYsh6Q', visited:false, date:'3月19日' },
+    { id:5002, category:'カフェ・バー', subGenre:'バー',    name:'アーク バー（Ark Bar）',         recommender:'真子さん動画（タイ旅行TOP5 第2位）', review:'サムイ島のビーチ沿いにある爆音バー。ファイアーダンスのパフォーマンスが圧巻で、異国情緒を全力で味わえる最高に楽しい場所。',     address:'サムイ島・チャウエンビーチ沿い',                                    mapUrl:gm('Ark Bar Samui','Chaweng Beach Koh Samui'),  youtubeUrl:'https://www.youtube.com/watch?v=vYI9OaYsh6Q', visited:false, date:'3月19日' },
+    { id:5003, category:'飲食店',      subGenre:'タイ料理', name:'バーン パッタイ（Baan Phadthai）', recommender:'真子さん動画（タイ旅行TOP5 第3位）', review:'ミシュラン（ビブグルマン）受賞店。ここのパッタイは日本で食べるものとはレベルが違う濃厚な旨味。ミシュランも納得の完成度。',       address:'21-23 Charoen Krung 44 Alley, North Sathon, Bang Rak, Bangkok', mapUrl:gm('Baan Phadthai Bangkok','Charoen Krung Bangkok'),youtubeUrl:'https://www.youtube.com/watch?v=vYI9OaYsh6Q', visited:false, date:'3月19日' },
+    { id:5004, category:'その他',      subGenre:'スポット', name:'カオサン通り（Khaosan Road）',   recommender:'真子さん動画（タイ旅行TOP5 第4位）', review:'バックパッカーの聖地。爆音と活気が入り混じる日本にはない「非日常」の塊。サソリを食べたり、現地のエネルギーを肌で感じられる。',  address:'バンコク市内',                                                     mapUrl:gm('Khaosan Road','Bangkok'),                   youtubeUrl:'https://www.youtube.com/watch?v=vYI9OaYsh6Q', visited:false, date:'3月19日' },
+    { id:5005, category:'飲食店',      subGenre:'タイ料理', name:'ブルー エレファント（Blue Elephant）', recommender:'真子さん動画（タイ旅行TOP5 第5位）', review:'歴史ある建物で食べる最高級のタイ料理。パッタイやトムヤムクン、カニのカレーなど、すべての料理が上品で緻密に計算された美味しさ。', address:'233 S Sathon Rd, Yan Nawa, Sathon, Bangkok',               mapUrl:gm('Blue Elephant Bangkok','S Sathon Rd Bangkok'),youtubeUrl:'https://www.youtube.com/watch?v=vYI9OaYsh6Q', visited:false, date:'3月19日' },
+
+    /* ── 最強チェーン店・マコなり流の勝ち注文 ── */
+    { id:6001, category:'飲食店', subGenre:'牛丼チェーン', name:'吉野家',         recommender:'真子さん動画（最強チェーン店・マコなり流の勝ち注文）', review:'牛丼（並）を「つゆぬき」で注文。白身をねぎと混ぜ泡立て→肉で包んで黄身にディップ→締めはご飯にお新香と醤油で「究極の牛なし牛丼」。普段使いにはライザップ牛サラダも激推し。', address:'全国チェーン', searchTags:'チェーン 全国展開', mapUrl:gm('吉野家',''), youtubeUrl:'https://www.youtube.com/watch?v=08I2beDYzaI', visited:false, date:'3月19日' },
+    { id:6002, category:'飲食店', subGenre:'ファミレス',   name:'びっくりドンキー', recommender:'真子さん動画（最強チェーン店・マコなり流の勝ち注文）', review:'チーズバーグディッシュが鉄板。箸で切れる柔らかさと和風ベースのオリジナルソースが絶妙。ディッシュサラダWの追加もおすすめ。',                                                          address:'全国チェーン', searchTags:'チェーン 全国展開', mapUrl:gm('びっくりドンキー',''), youtubeUrl:'https://www.youtube.com/watch?v=NdeZmo5_nG4', visited:false, date:'3月19日' },
+    { id:6003, category:'飲食店', subGenre:'ファミレス',   name:'ロイヤルホスト',  recommender:'真子さん動画（最強チェーン店・マコなり流の勝ち注文）', review:'黒×黒ハンバーグ一択。ファミレスの域を超えたクオリティで「お値段以上」の贅沢感。オニオングラタンスープは絶対に外せない逸品。',                                                          address:'全国チェーン', searchTags:'チェーン 全国展開', mapUrl:gm('ロイヤルホスト',''), youtubeUrl:'https://www.youtube.com/watch?v=NdeZmo5_nG4', visited:false, date:'3月19日' },
+    { id:6004, category:'飲食店', subGenre:'ファミレス',   name:'サイゼリヤ',      recommender:'真子さん動画（最強チェーン店・マコなり流の勝ち注文）', review:'ラムのランプステーキ＆辛味チキンが最強。圧倒的コスパ。辛味チキンは「よく焼き」で頼むと皮がパリッとしてさらに美味。',                                                                    address:'全国チェーン', searchTags:'チェーン 全国展開', mapUrl:gm('サイゼリヤ',''), youtubeUrl:'https://www.youtube.com/watch?v=VDDixcNVNEA', visited:false, date:'3月19日' },
+
+    /* ── 最強チェーン店・マコなり流の勝ち注文（デリバリー編） ── */
+    { id:6005, category:'飲食店', subGenre:'サラダ',  name:'クリスピー・サラダ・ワークス', recommender:'真子さん動画（最強チェーン店・マコなり流の勝ち注文 デリバリー編）', review:'スプーンで食べる濃厚カスタムサラダ。食材を選んで自分好みにアレンジできる。', address:'デリバリー', searchTags:'デリバリー Uber Eats チェーン 全国展開', mapUrl:gm('クリスピー・サラダ・ワークス',''), youtubeUrl:'https://www.youtube.com/watch?v=NdeZmo5_nG4', visited:false, date:'3月19日' },
+    { id:6006, category:'飲食店', subGenre:'健康食',  name:'筋肉食堂',             recommender:'真子さん動画（最強チェーン店・マコなり流の勝ち注文 デリバリー編）', review:'究極の鶏むね肉ステーキ。高タンパク・低脂質で筋トレ勢だけでなく健康志向の人にも最適。',   address:'デリバリー', searchTags:'デリバリー Uber Eats チェーン 全国展開', mapUrl:gm('筋肉食堂',''), youtubeUrl:'https://www.youtube.com/watch?v=NdeZmo5_nG4', visited:false, date:'3月19日' },
+    { id:6007, category:'飲食店', subGenre:'洋食',    name:'つばめグリル',          recommender:'真子さん動画（最強チェーン店・マコなり流の勝ち注文 デリバリー編）', review:'アルミホイル包みのハンブルグステーキが名物。熱々のまま届く独自の包み方が絶妙。',             address:'デリバリー', searchTags:'デリバリー Uber Eats チェーン 全国展開', mapUrl:gm('つばめグリル',''), youtubeUrl:'https://www.youtube.com/watch?v=NdeZmo5_nG4', visited:false, date:'3月19日' },
+  ];
+
+  /* ─── データ読み込み・初期シード ─── */
+  let items = JSON.parse(localStorage.getItem('osusume_list') || '[]');
+
+  if (!localStorage.getItem(SEED_KEY)) {
+    const existingIds = new Set(items.map(i => i.id));
+    const toAdd = SEED_DATA.filter(s => !existingIds.has(s.id));
+    items = [...toAdd, ...items];
+    /* 旧バージョンの壊れた goo.gl URL を正しい形式に上書き */
+    const mapUrlFix = Object.fromEntries(SEED_DATA.map(s => [s.id, s.mapUrl]));
+    items = items.map(item => {
+      if (mapUrlFix[item.id] && item.mapUrl && item.mapUrl.includes('goo.gl')) {
+        return { ...item, mapUrl: mapUrlFix[item.id] };
+      }
+      return item;
+    });
+    localStorage.setItem('osusume_list', JSON.stringify(items));
+    localStorage.setItem(SEED_KEY, '1');
+  }
+
+  let currentFilter = 'すべて';
+  let showVisitedOnly = false;
+  let searchQuery = '';
+
+  /* ── トースト ── */
+  let toastTimer;
+  function showToast(msg = '保存しました ✓') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  function save() {
+    localStorage.setItem('osusume_list', JSON.stringify(items));
+    pushUnifiedSyncState();
+  }
+
+  /* ── バックアップ（JSONエクスポート） ── */
+  function exportData() {
+    const data = {
+      exportedAt: new Date().toLocaleString('ja-JP'),
+      items: JSON.parse(localStorage.getItem('osusume_list') || '[]'),
+      books: JSON.parse(localStorage.getItem('book_gallery') || '[]')
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `おすすめリスト_バックアップ_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    showToast('💾 バックアップファイルを保存しました');
+  }
+
+  /* ── 検索 ── */
+  function onSearch(el) {
+    searchQuery = el.value;
+    document.getElementById('searchClear').classList.toggle('visible', searchQuery.length > 0);
+    render();
+  }
+
+  function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    searchQuery = '';
+    document.getElementById('searchClear').classList.remove('visible');
+    render();
+  }
+
+  /* ── フォーム開閉 ── */
+  function toggleForm() {
+    const btn  = document.getElementById('formToggle');
+    const body = document.getElementById('formBody');
+    btn.classList.toggle('open');
+    body.classList.toggle('open');
+  }
+
+  /* ── 追加 ── */
+  function addItem() {
+    const name = document.getElementById('name').value.trim();
+    if (!name) {
+      const el = document.getElementById('name');
+      el.focus();
+      el.style.borderColor = '#d95f5f';
+      setTimeout(() => el.style.borderColor = '', 1200);
+      return;
+    }
+    items.unshift({
+      id:          Date.now(),
+      category:    document.getElementById('category').value,
+      name,
+      subGenre:    document.getElementById('subGenre').value.trim(),
+      recommender: document.getElementById('recommender').value.trim(),
+      review:      document.getElementById('review').value.trim(),
+      myReview:    document.getElementById('myReview').value.trim(),
+      address:     document.getElementById('address').value.trim(),
+      mapUrl:      document.getElementById('mapUrl').value.trim(),
+      youtubeUrl:  document.getElementById('youtubeUrl').value.trim(),
+      visited:     false,
+      date:        new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })
+    });
+    save();
+    clearForm();
+    render();
+    toggleForm();
+  }
+
+  function clearForm() {
+    ['name','subGenre','recommender','review','myReview','address','mapUrl','youtubeUrl'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('category').value = '飲食店';
+  }
+
+  /* ── 削除 ── */
+  function deleteItem(id) {
+    if (!confirm('削除しますか？')) return;
+    items = items.filter(i => i.id !== id);
+    save();
+    render();
+  }
+
+  /* ── 行った切り替え ── */
+  function toggleVisited(id) {
+    const item = items.find(i => i.id === id);
+    if (item) {
+      item.visited = !item.visited;
+      save();
+      render();
+      showToast(item.visited ? '✓ 行った！を記録しました' : '行った！を取り消しました');
+    }
+  }
+
+  /* ── フィルター ── */
+  function setFilter(el) {
+    document.querySelectorAll('#filters .chip:not(.chip-visited)').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    currentFilter = el.dataset.filter;
+    render();
+  }
+
+  function toggleVisitedFilter(el) {
+    showVisitedOnly = !showVisitedOnly;
+    el.classList.toggle('active', showVisitedOnly);
+    render();
+  }
+
+  /* ── 描画 ── */
+  function render() {
+    /* 店だけ i_<id>（bk_s）を再適用。本（数値キー）とはキー形式が分かれているので混線しない */
+    try {
+      if (typeof _applyItemEntriesFromState === 'function') {
+        _applyItemEntriesFromState(JSON.parse(localStorage.getItem('bk_s') || '{}'));
+      }
+    } catch (e) {}
+    const list = document.getElementById('list');
+    let filtered = currentFilter === 'すべて' ? items : items.filter(i => i.category === currentFilter);
+    if (showVisitedOnly) filtered = filtered.filter(i => i.visited);
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(i =>
+        (i.name        || '').toLowerCase().includes(q) ||
+        (i.address     || '').toLowerCase().includes(q) ||
+        (i.recommender || '').toLowerCase().includes(q) ||
+        (i.review      || '').toLowerCase().includes(q) ||
+        (i.myReview    || '').toLowerCase().includes(q) ||
+        (i.subGenre    || '').toLowerCase().includes(q) ||
+        (i.searchTags  || '').toLowerCase().includes(q)
+      );
+    }
+
+    document.getElementById('count').textContent = filtered.length + ' 件';
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="empty">該当する項目がありません</div>';
+      return;
+    }
+
+    list.innerHTML = filtered.map(item => {
+      const nameHtml = item.mapUrl
+        ? `<a href="${esc(item.mapUrl)}" target="_blank" rel="noopener">${esc(item.name)}</a>`
+        : esc(item.name);
+
+      const isBook = item.category === '本';
+      const mapBtn = isBook
+        ? (item.mapUrl
+            ? `<a class="btn-map" href="${esc(item.mapUrl)}" target="_blank" rel="noopener" style="background:#e47911;">📚 Amazon で見る</a>`
+            : `<span class="btn-map-disabled">📚 リンクなし</span>`)
+        : '';
+
+      return `
+      <div class="item-card${item.visited ? ' visited' : ''}">
+        <div class="card-head">
+          <span class="badge badge-${esc(item.category)}">${esc(item.category)}</span>
+          ${item.subGenre ? `<span class="sub-genre-badge">${esc(item.subGenre)}</span>` : ''}
+          <span class="card-date">${item.date}</span>
+          <button class="btn-icon" onclick="openEditModal(${item.id})" title="編集">✏️</button>
+          <button class="btn-icon del" onclick="deleteItem(${item.id})" title="削除">✕</button>
+        </div>
+        <div class="card-body">
+          <div class="card-visited-badge">✓ 行った！</div>
+          <div class="card-name">${nameHtml}</div>
+          ${item.recommender ? `<div class="card-meta">👤 ${esc(item.recommender)}</div>` : ''}
+          ${item.address === '全国チェーン'
+              ? `<div><span class="tag-special tag-chain">🏪 全国展開</span></div>`
+              : item.address === 'デリバリー'
+              ? `<div><span class="tag-special tag-delivery">🛵 Uber Eats / デリバリー</span></div>`
+              : item.address
+              ? `<div class="card-address">📍 ${esc(item.address)}</div>` : ''}
+          ${item.review    ? `<div class="card-review">💬 ${esc(item.review)}</div>` : ''}
+          ${item.myReview  ? `<div class="card-my-review"><span class="card-my-review-label">✍️ 自分の感想</span>${esc(item.myReview)}</div>` : ''}
+        </div>
+        <div class="card-foot">
+          ${(mapBtn || item.youtubeUrl) ? `
+          <div class="card-foot-row1">
+            ${mapBtn}
+            ${item.youtubeUrl
+              ? `<a class="btn-youtube" href="${esc(item.youtubeUrl)}" target="_blank" rel="noopener">▶ 動画</a>`
+              : ''}
+          </div>` : ''}
+          <button class="btn-visit-full${item.visited ? ' done' : ''}" onclick="toggleVisited(${item.id})">
+            ${item.visited ? '行った！' : '行ってない！'}
+          </button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  /* ─── 編集モーダル ─── */
+  let editingId = null;
+
+  function openEditModal(id) {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    editingId = id;
+    document.getElementById('edit-category').value   = item.category   || '飲食店';
+    document.getElementById('edit-name').value        = item.name        || '';
+    document.getElementById('edit-recommender').value = item.recommender || '';
+    document.getElementById('edit-myReview').value    = item.myReview    || '';
+    document.getElementById('edit-subGenre').value    = item.subGenre    || '';
+    document.getElementById('edit-address').value     = item.address     || '';
+    document.getElementById('edit-mapUrl').value      = item.mapUrl      || '';
+    document.getElementById('edit-youtubeUrl').value  = item.youtubeUrl  || '';
+    document.getElementById('editModal').classList.add('open');
+    setTimeout(() => document.getElementById('edit-name').focus(), 100);
+  }
+
+  function closeEditModal() {
+    document.getElementById('editModal').classList.remove('open');
+    editingId = null;
+  }
+
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('editModal')) closeEditModal();
+  }
+
+  function saveEdit() {
+    const item = items.find(i => i.id === editingId);
+    if (!item) return;
+    const name = document.getElementById('edit-name').value.trim();
+    if (!name) {
+      const el = document.getElementById('edit-name');
+      el.focus();
+      el.style.borderColor = '#d95f5f';
+      setTimeout(() => el.style.borderColor = '', 1200);
+      return;
+    }
+    item.category    = document.getElementById('edit-category').value;
+    item.name        = name;
+    item.recommender = document.getElementById('edit-recommender').value.trim();
+    item.myReview    = document.getElementById('edit-myReview').value.trim();
+    item.subGenre    = document.getElementById('edit-subGenre').value.trim();
+    item.address     = document.getElementById('edit-address').value.trim();
+    item.mapUrl      = document.getElementById('edit-mapUrl').value.trim();
+    item.youtubeUrl  = document.getElementById('edit-youtubeUrl').value.trim();
+    save();
+    closeEditModal();
+    render();
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeEditModal(); closeBookModal(); }
+  });
+
+  /* ══════════════════════════════
+     タブ切り替え
+  ══════════════════════════════ */
+  function switchTab(id, btn) {
+    document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + id).classList.add('active');
+    btn.classList.add('active');
+    if (id === 'books') renderBookGallery();
+  }
+
+  /* ══════════════════════════════════════════════════════
+     ☁ Google Apps Script クラウド同期
+     ─ 下の GAS_URL に発行したURLを貼り付けてください ─
+     保存形式（BookState シートの key / value 列）:
+       数値キー … 本（例 2001）→ value は JSON 文字列 { r,s,m }（本のみ・店とキーが被らない）
+       i_<店id> … お店→ value は JSON { m: "感想", v: 1|0 }（v=1 が「行った！」）
+       _ts … 更新時刻（ミリ秒）
+     GAS の doPost では value がオブジェクトのとき必ず JSON.stringify して B 列へ。
+  ══════════════════════════════════════════════════════ */
+
+  const GAS_URL    = 'https://script.google.com/macros/s/AKfycbyXvTki9nwtz28uMtCLHPxJZnUE8dZV7tFtCaA9LuYn2bUjwFZcCSDb3svIDG0uxdPP/exec';
+  const SHEET_NAME = 'BookState';   // ← スプレッドシートのタブ名（変更する場合はここだけ直す）
+
+  /* GASへのURLを毎回生成（シート名 + キャッシュ無効化タイムスタンプ付き） */
+  function gasUrl() {
+    return GAS_URL + '?sheet=' + encodeURIComponent(SHEET_NAME) + '&t=' + Date.now();
+  }
+
+  /* ── 同期インジケーター ── */
+  const _syncEl = () => document.getElementById('sync-indicator');
+  function setSyncStatus(status, text) {
+    const el = _syncEl();
+    if (!el) return;
+    el.className = status;
+    el.textContent = text || '';
+    if (status === 'ok') setTimeout(() => { if (el.className === 'ok') el.className = 'idle'; }, 3000);
+  }
+
+  /* ── ボタン表示（GAS_URL がある場合のみ） ── */
+  if (GAS_URL) {
+    const _rb = document.getElementById('btn-force-reload');
+    if (_rb) _rb.style.display = '';
+  }
+
+  /* ── クラウドから読み込み（シート名指定・キャッシュ完全無効化） ── */
+  async function loadFromCloud() {
+    if (!GAS_URL) { setSyncStatus('no-url'); return null; }
+    setSyncStatus('syncing', '☁ 確認中… (' + SHEET_NAME + ')');
+    try {
+      const res = await fetch(gasUrl(), {   // sheet=BookState&t=... 付きURL
+        redirect: 'follow',
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      if (data && typeof data === 'object' && !data.error) {
+        setSyncStatus('ok', '✓ クラウド確認済み');
+        return data;
+      }
+      setSyncStatus('offline', '⚠ データなし（シート: ' + SHEET_NAME + '）');
+      return null;
+    } catch(e) {
+      setSyncStatus('offline', '⚠ オフライン');
+      return null;
+    }
+  }
+
+  /* ── 強制リロード（localStorage破棄 → クラウドから再取得） ── */
+  async function forceReloadFromCloud() {
+    const btn = document.getElementById('btn-force-reload');
+    if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+    setSyncStatus('syncing', '☁ 強制取得中…');
+    try { localStorage.removeItem('bk_s'); } catch(e) {}
+    const cloudState = await loadFromCloud();
+    if (cloudState) {
+      _applyState(cloudState);
+      const merged = _buildState();
+      merged._ts = Number(cloudState._ts) || merged._ts;
+      _saveLocal(merged);
+      try { localStorage.setItem('osusume_list', JSON.stringify(items)); } catch(e) {}
+      renderBookGallery();
+      render();
+      setSyncStatus('ok', '✓ クラウドから最新データを取得しました');
+    } else {
+      setSyncStatus('offline', '⚠ 取得失敗（オフラインの可能性）');
+    }
+    if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+  }
+
+  /* ── クラウドへ保存（シート名 + タイムスタンプ付き） ── */
+  async function saveToCloud(state) {
+    if (!GAS_URL) return;
+    setSyncStatus('syncing', '☁ 保存中… (' + SHEET_NAME + ')');
+    /* POSTのボディにもシート名を含める → GAS側で受け取り可能 */
+    const payload = Object.assign({ _sheet: SHEET_NAME }, state);
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify(payload),
+      });
+      setSyncStatus('ok', '✓ クラウドに保存');
+    } catch(e) {
+      setSyncStatus('offline', '⚠ 保存失敗（ローカルのみ）');
+    }
+  }
+
+  /* ══════════════════════════════
+     本ギャラリー
+  ══════════════════════════════ */
+  const BOOK_SEED_KEY = 'book_seeded_v1';
+  const YT_BOOK = 'https://youtu.be/21h9cX-P_PM?si=qzYXsaMAC1ULylbd';
+  const REC     = '真子さん動画（人生で必ず読むべき本100選）';
+  const amz = t => 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(t);
+
+  const BOOK_SEED_DATA = [
+    // ① 思考法・ビジネスの基礎 (1-20)
+    {id:2001,section:'思考法・ビジネスの基礎',title:'イシューからはじめよ',author:'安宅和人',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2002,section:'思考法・ビジネスの基礎',title:'0秒思考',author:'赤羽雄二',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2003,section:'思考法・ビジネスの基礎',title:'GIVE & TAKE',author:'アダム・グラント',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2004,section:'思考法・ビジネスの基礎',title:'影響力の武器',author:'ロバート・チャルディーニ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2005,section:'思考法・ビジネスの基礎',title:'起業家の思考法',author:'並木裕太',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2006,section:'思考法・ビジネスの基礎',title:'学びを結果に変えるアウトプット大全',author:'樺沢紫苑',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2007,section:'思考法・ビジネスの基礎',title:'コンサル1年目が学ぶこと',author:'大石哲之',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2008,section:'思考法・ビジネスの基礎',title:'「具体⇔抽象」トレーニング',author:'細谷功',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2009,section:'思考法・ビジネスの基礎',title:'地頭力を鍛える',author:'細谷功',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2010,section:'思考法・ビジネスの基礎',title:'世界一やさしい問題解決の授業',author:'渡辺健介',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2011,section:'思考法・ビジネスの基礎',title:'観察力の鍛え方',author:'佐渡島庸平',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2012,section:'思考法・ビジネスの基礎',title:'メモの魔力',author:'前田裕二',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2013,section:'思考法・ビジネスの基礎',title:'書くのがしんどい',author:'竹村俊助',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2014,section:'思考法・ビジネスの基礎',title:'各技術・伝える技術',author:'倉島保美',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2015,section:'思考法・ビジネスの基礎',title:'伝え方が9割',author:'佐々木圭一',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2016,section:'思考法・ビジネスの基礎',title:'1分で話せ',author:'伊藤羊一',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2017,section:'思考法・ビジネスの基礎',title:'ザ・コピーライティング',author:'ジョン・ケープルズ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2018,section:'思考法・ビジネスの基礎',title:'入門 考える技術・書く技術',author:'山崎康司',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2019,section:'思考法・ビジネスの基礎',title:'プレゼンテーションzen',author:'ガー・レイノルズ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2020,section:'思考法・ビジネスの基礎',title:'ノンデザイナーズ・デザインブック',author:'ロビン・ウィリアムズ',recommender:REC,youtubeUrl:YT_BOOK},
+    // ② お金・経済・社会 (21-40)
+    {id:2021,section:'お金・経済・社会',title:'金持ち父さん 貧乏父さん',author:'ロバート・キヨサキ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2022,section:'お金・経済・社会',title:'お金2.0',author:'佐藤航陽',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2023,section:'お金・経済・社会',title:'本当の自由を手に入れる お金の大学',author:'両＠リベ大',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2024,section:'お金・経済・社会',title:'バビロン大富豪の教え',author:'ジョージ・S・クレイソン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2025,section:'お金・経済・社会',title:'ジェイソン流お金の増やし方',author:'厚切りジェイソン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2026,section:'お金・経済・社会',title:'難しいことはわかりませんが、お金の増やし方を教えてください！',author:'山崎元',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2027,section:'お金・経済・社会',title:'ユダヤの商法',author:'藤田田',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2028,section:'お金・経済・社会',title:'DIE WITH ZERO',author:'ビル・パーキンス',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2029,section:'お金・経済・社会',title:'財務3表一体理解法',author:'國貞克則',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2030,section:'お金・経済・社会',title:'ワーク・シフト',author:'リンダ・グラットン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2031,section:'お金・経済・社会',title:'転職の思考法',author:'北野唯我',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2032,section:'お金・経済・社会',title:'これからの生き方',author:'北野唯我',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2033,section:'お金・経済・社会',title:'22世紀の民主主義',author:'成田悠輔',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2034,section:'お金・経済・社会',title:'21世紀の資本',author:'トマ・ピケティ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2035,section:'お金・経済・社会',title:'人新世の「資本論」',author:'斎藤幸平',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2036,section:'お金・経済・社会',title:'LIFE SPAN（ライフスパン）',author:'デビッド・A・シンクレア',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2037,section:'お金・経済・社会',title:'スタンフォード式 最高のスリープ',author:'西野精治',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2038,section:'お金・経済・社会',title:'医者が教えるサウナの教科書',author:'加藤容崇',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2039,section:'お金・経済・社会',title:'EQ こころの知能指数',author:'ダニエル・ゴールマン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2040,section:'お金・経済・社会',title:'目からウロコのコーチング',author:'榎本英剛',recommender:REC,youtubeUrl:YT_BOOK},
+    // ③ 組織・リーダーシップ・戦略 (41-60)
+    {id:2041,section:'組織・リーダーシップ・戦略',title:'リーダーの仮面',author:'安藤広大',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2042,section:'組織・リーダーシップ・戦略',title:'なぜ人と組織は変われないのか',author:'ロバート・キーガン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2043,section:'組織・リーダーシップ・戦略',title:'天才を殺す凡人',author:'北野唯我',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2044,section:'組織・リーダーシップ・戦略',title:'学習する組織',author:'ピーター・センゲ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2045,section:'組織・リーダーシップ・戦略',title:'超入門 失敗の本質',author:'鈴木博毅',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2046,section:'組織・リーダーシップ・戦略',title:'もし高校野球の女子マネージャーがドラッカーの『マネジメント』を読んだら',author:'岩崎夏海',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2047,section:'組織・リーダーシップ・戦略',title:'ハイパワー・マーケティング',author:'ジェイ・エイブラハム',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2048,section:'組織・リーダーシップ・戦略',title:'ブルー・オーシャン戦略',author:'W・チャン・キム',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2049,section:'組織・リーダーシップ・戦略',title:'マーケティングとは「組織革命」である',author:'森岡毅',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2050,section:'組織・リーダーシップ・戦略',title:'シュガーマンのマーケティング30の法則',author:'ジョセフ・シュガーマン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2051,section:'組織・リーダーシップ・戦略',title:'マイケル・ポーターの競争戦略',author:'ジョアン・マグレッタ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2052,section:'組織・リーダーシップ・戦略',title:'ジョブ理論',author:'クレイトン・クリステンセン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2053,section:'組織・リーダーシップ・戦略',title:'ZERO to ONE',author:'ピーター・ティール',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2054,section:'組織・リーダーシップ・戦略',title:'確率思考の戦略論',author:'森岡毅',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2055,section:'組織・リーダーシップ・戦略',title:'マーケット感覚を身につけよう',author:'ちきりん',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2056,section:'組織・リーダーシップ・戦略',title:'ファンベース',author:'佐藤尚之',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2057,section:'組織・リーダーシップ・戦略',title:'ブランディングの科学',author:'バイロン・シャープ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2058,section:'組織・リーダーシップ・戦略',title:'ついやってしまう体験のつくりかた',author:'玉樹真一郎',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2059,section:'組織・リーダーシップ・戦略',title:'ストーリーとしての競争戦略',author:'楠木建',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2060,section:'組織・リーダーシップ・戦略',title:'人は悪魔に熱狂する',author:'松本健太郎',recommender:REC,youtubeUrl:YT_BOOK},
+    // ④ 時間術・マインドセット・教養 (61-80)
+    {id:2061,section:'時間術・マインドセット・教養',title:'ビジョナリー・カンパニー 2',author:'ジム・コリンズ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2062,section:'時間術・マインドセット・教養',title:'アナロジー思考',author:'細谷功',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2063,section:'時間術・マインドセット・教養',title:'論語と算盤',author:'渋沢栄一',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2064,section:'時間術・マインドセット・教養',title:'成功者の告白',author:'神田昌典',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2065,section:'時間術・マインドセット・教養',title:'経営者になるためのノート',author:'柳井正',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2066,section:'時間術・マインドセット・教養',title:'イノベーションのジレンマ',author:'クレイトン・クリステンセン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2067,section:'時間術・マインドセット・教養',title:'なぜ、あなたの仕事は終わらないのか',author:'中島聡',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2068,section:'時間術・マインドセット・教養',title:'スマホ脳',author:'アンデシュ・ハンセン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2069,section:'時間術・マインドセット・教養',title:'エッセンシャル思考',author:'グレッグ・マキューン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2070,section:'時間術・マインドセット・教養',title:'時間術大全',author:'ジェイク・ナップ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2071,section:'時間術・マインドセット・教養',title:'自分の時間を取り戻せ',author:'ちきりん',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2072,section:'時間術・マインドセット・教養',title:'FACTFULNESS（ファクトフルネス）',author:'ハンス・ロスリング',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2073,section:'時間術・マインドセット・教養',title:'ニュータイプの時代',author:'山口周',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2074,section:'時間術・マインドセット・教養',title:'現代アート超入門',author:'藤田令伊',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2075,section:'時間術・マインドセット・教養',title:'サピエンス全史',author:'ユヴァル・ノア・ハラリ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2076,section:'時間術・マインドセット・教養',title:'バカの壁',author:'養老孟司',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2077,section:'時間術・マインドセット・教養',title:'データの見えざる手',author:'矢野和男',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2078,section:'時間術・マインドセット・教養',title:'話を聞かない男、地図が読めない女',author:'アラン・ピーズ',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2079,section:'時間術・マインドセット・教養',title:'自分だけの答えが見つかる 13歳からのアート思考',author:'末永幸歩',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2080,section:'時間術・マインドセット・教養',title:'13歳からの地政学',author:'田中孝幸',recommender:REC,youtubeUrl:YT_BOOK},
+    // ⑤ 哲学・心理学・生き方 (81-100 + おまけ)
+    {id:2081,section:'哲学・心理学・生き方',title:'成長マインドセット',author:'鈴木博毅',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2082,section:'哲学・心理学・生き方',title:'失敗の科学',author:'マシュー・サイド',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2083,section:'哲学・心理学・生き方',title:'反応しない練習',author:'草薙龍瞬',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2084,section:'哲学・心理学・生き方',title:'完訳 7つの習慣',author:'スティーブン・R・コヴィー',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2085,section:'哲学・心理学・生き方',title:'夢をかなえるゾウ',author:'水野敬也',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2086,section:'哲学・心理学・生き方',title:'世界のエリートはなぜ「美意識」を鍛えるのか？',author:'山口周',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2087,section:'哲学・心理学・生き方',title:'人を変える',author:'デール・カーネギー',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2088,section:'哲学・心理学・生き方',title:'仕事は楽しいかね？',author:'デイル・ドーテン',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2089,section:'哲学・心理学・生き方',title:'スタンフォードの自分を変える教室',author:'ケリー・マクゴニガル',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2090,section:'哲学・心理学・生き方',title:'1%の努力',author:'ひろゆき',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2091,section:'哲学・心理学・生き方',title:'これからの「正義」の話をしよう',author:'マイケル・サンデル',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2092,section:'哲学・心理学・生き方',title:'君たちはどう生きるか',author:'吉野源三郎',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2093,section:'哲学・心理学・生き方',title:'ゼロ',author:'堀江貴文',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2094,section:'哲学・心理学・生き方',title:'夜と霧',author:'ヴィクトール・フランクル',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2095,section:'哲学・心理学・生き方',title:'実力も運のうち',author:'マイケル・サンデル',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2096,section:'哲学・心理学・生き方',title:'ケーキの切れない非行少年たち',author:'宮口幸治',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2097,section:'哲学・心理学・生き方',title:'今日のアート',author:'岡本太郎',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2098,section:'哲学・心理学・生き方',title:'嫌われる勇気',author:'岸見一郎・古賀史健',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2099,section:'哲学・心理学・生き方',title:'幸せになる勇気',author:'岸見一郎・古賀史健',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2100,section:'哲学・心理学・生き方',title:'自分の中に毒を持て',author:'岡本太郎',recommender:REC,youtubeUrl:YT_BOOK},
+    {id:2101,section:'哲学・心理学・生き方',title:'史上最強の哲学入門',author:'飲茶',recommender:REC,youtubeUrl:YT_BOOK},
+  ].map(b => ({ ...b, amazonUrl: amz(b.title + ' ' + b.author), read: false }));
+
+  const SECTION_STYLE = {
+    '思考法・ビジネスの基礎':      { cls: 'genre-business',   emoji: '💼' },
+    'お金・経済・社会':             { cls: 'genre-money',      emoji: '💰' },
+    '組織・リーダーシップ・戦略':  { cls: 'genre-career',     emoji: '🏆' },
+    '時間術・マインドセット・教養': { cls: 'genre-thinking',   emoji: '⏱️' },
+    '哲学・心理学・生き方':         { cls: 'genre-philosophy', emoji: '🏛️' },
+  };
+
+  /* ══════════════════════════════════════════════
+     本データ：シードはJSに固定、ユーザー状態だけを
+     超軽量な1キー "bk_s" に保存（スマホ完全対応）
+  ══════════════════════════════════════════════ */
+
+  // ① 毎回シードデータから books を再構築（localStorage には保存しない）
+  let books = BOOK_SEED_DATA.map(b => ({
+    ...b,
+    amazonUrl: amz(b.title + ' ' + b.author),
+    read:     false,
+    rating:   null,
+    myReview: '',
+  }));
+
+  // ② ユーザー状態管理（本: id キー / 店: i_<id> キー / 感想 m / タイムスタンプ _ts）
+  let _cloudFetched = false;   // クラウード取得完了フラグ
+
+  function _loadBkState() {
+    try { return JSON.parse(localStorage.getItem('bk_s') || '{}'); }
+    catch(e) { return {}; }
+  }
+
+  /* シートのセルは文字列化されることがあるため、オブジェクトに正規化 */
+  function _parseStateVal(v) {
+    if (v == null || v === '') return {};
+    if (typeof v === 'object' && v !== null && !Array.isArray(v)) return v;
+    try {
+      const o = JSON.parse(String(v));
+      return typeof o === 'object' && o !== null && !Array.isArray(o) ? o : {};
+    } catch(e) { return {}; }
+  }
+
+  /* お店のみ：キー i_<数値id>。本の数値キー（2001 等）とは別ルートなのでデータが混ざらない */
+  function _applyItemEntriesFromState(state) {
+    if (!state || typeof state !== 'object') return;
+    const skip = new Set(['_ts', '_sheet']);
+    for (const k of Object.keys(state)) {
+      if (skip.has(k)) continue;
+      const im = /^i_(\d+)$/.exec(k);
+      if (!im) continue;
+      const id = Number(im[1]);
+      const item = items.find(x => x.id === id);
+      if (!item) continue;
+      const s = _parseStateVal(state[k]);
+      if ('m' in s) item.myReview = String(s.m ?? '');
+      if ('v' in s) item.visited = (s.v === 1 || s.v === true);
+    }
+  }
+
+  function _buildState() {
+    let prev = {};
+    try { prev = JSON.parse(localStorage.getItem('bk_s') || '{}'); } catch(e) {}
+    const state = { _ts: Date.now() };
+    books.forEach(b => {
+      const entry = {};
+      if (b.read) entry.r = 1;
+      if (b.rating != null) entry.s = b.rating;
+      const m = (b.myReview || '').trim();
+      const pBe = _parseStateVal(prev[b.id] ?? prev[String(b.id)]);
+      if (m || ('m' in pBe)) entry.m = m;
+      if (Object.keys(entry).length) state[b.id] = entry;
+    });
+    items.forEach(it => {
+      const key = 'i_' + it.id;
+      const m = (it.myReview || '').trim();
+      const pIe = _parseStateVal(prev[key]);
+      const entry = {};
+      if (m || ('m' in pIe)) entry.m = m;
+      if (it.visited) entry.v = 1;
+      else if ('v' in pIe) entry.v = 0;
+      if (Object.keys(entry).length) state[key] = entry;
+    });
+    return state;
+  }
+
+  function _saveLocal(state) {
+    try { localStorage.setItem('bk_s', JSON.stringify(state)); } catch(e) {}
+  }
+
+  function pushUnifiedSyncState() {
+    try {
+      const st = _buildState();
+      _saveLocal(st);
+      if (_cloudFetched) saveToCloud(st);
+    } catch(e) {}
+  }
+
+  function saveBooks() {
+    pushUnifiedSyncState();
+  }
+
+  /* クラウド／bk_s を適用。キーに含まれるフィールドだけ上書きし、無い列は壊さない（改訂履歴復元や旧行との互換） */
+  function _applyState(state) {
+    if (!state || typeof state !== 'object') return;
+    books = books.map(b => {
+      const raw = state[b.id] ?? state[String(b.id)];
+      if (raw == null || raw === '') return b;
+      const s = _parseStateVal(raw);
+      if (Object.keys(s).length === 0) return b;
+      const nb = { ...b };
+      if ('r' in s) nb.read = s.r === 1;
+      if ('s' in s) nb.rating = s.s ?? null;
+      if ('m' in s) nb.myReview = String(s.m ?? '');
+      return nb;
+    });
+    _applyItemEntriesFromState(state);
+  }
+
+  // ③ 起動時：bk_s で本＋店の感想を即時復元（オフライン対応）
+  const _localState = _loadBkState();
+  _applyState(_localState);
+  try { localStorage.setItem('osusume_list', JSON.stringify(items)); } catch(e) {}
+
+  let bookFilter = 'すべて';
+  let bookSearchQuery = '';
+  let bookViewMode = 'grid';
+  let activeBookId = null;
+  const openSections = new Set(['思考法・ビジネスの基礎','お金・経済・社会','組織・リーダーシップ・戦略','時間術・マインドセット・教養','哲学・心理学・生き方']);
+
+  /* ── 評価 ── */
+  function setBookRating(rating) {
+    const book = books.find(b => b.id === activeBookId);
+    if (!book) return;
+    book.rating = (book.rating === rating) ? null : rating;
+    saveBooks();
+    showToast(book.rating != null ? `${RATING_EMOJI[book.rating]} 評価を保存しました` : '評価をリセットしました');
+    openBookModal(activeBookId);
+    renderBookGallery();
+  }
+
+  /* ── レコメンドロジック ── */
+  function getGenreProfile() {
+    // 各ジャンルの評価スコアを集計
+    const profile = {};
+    books.filter(b => b.rating != null).forEach(b => {
+      if (!profile[b.section]) profile[b.section] = { sum: 0, count: 0 };
+      profile[b.section].sum   += b.rating;
+      profile[b.section].count += 1;
+    });
+    return profile;
+  }
+
+  function getRecommendedBooks() {
+    const profile = getGenreProfile();
+    // 🌟 が1冊以上あるジャンル = 推奨
+    const lovedGenres   = Object.entries(profile).filter(([,v]) => v.sum >= 5).map(([k]) => k);
+    // ❌ しかないジャンル = 非推奨
+    const dislikedGenres = Object.entries(profile).filter(([,v]) => v.sum <= -2 && v.sum / v.count < 0).map(([k]) => k);
+    return { lovedGenres, dislikedGenres };
+  }
+
+  function onBookSearch(el) {
+    bookSearchQuery = el.value.trim();
+    document.getElementById('book-search-clear').style.display = bookSearchQuery ? '' : 'none';
+    renderBookGallery();
+  }
+
+  function clearBookSearch() {
+    bookSearchQuery = '';
+    document.getElementById('book-search-input').value = '';
+    document.getElementById('book-search-clear').style.display = 'none';
+    renderBookGallery();
+  }
+
+  function setBookFilter(el) {
+    document.querySelectorAll('#book-filters .chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    bookFilter = el.dataset.bfilter;
+    renderBookGallery();
+  }
+
+  function toggleAccordion(section) {
+    if (openSections.has(section)) openSections.delete(section);
+    else openSections.add(section);
+    renderBookGallery();
+  }
+
+  function setBookView(mode, btn) {
+    bookViewMode = mode;
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderBookGallery();
+  }
+
+  const RATING_EMOJI = { 5: '🌟', 3: '🙂', 1: '🤔', '-2': '❌' };
+
+  /* ── ジャンルごとのランダムピック（ページ読み込み時に1度決定） ── */
+  const sessionPicks = {};
+  function getSpotlightBook(section) {
+    if (sessionPicks[section] != null) {
+      const book = books.find(b => b.id === sessionPicks[section]);
+      if (book) return book;
+    }
+    const pool = books.filter(b => b.section === section);
+    if (pool.length === 0) return null;
+    const picked = pool[Math.floor(Math.random() * pool.length)];
+    sessionPicks[section] = picked.id;
+    return picked;
+  }
+
+  /* ── 「すべて見る」展開状態 ── */
+  const expandedSections = new Set();
+  function toggleExpandSection(section, e) {
+    e.stopPropagation();
+    if (expandedSections.has(section)) expandedSections.delete(section);
+    else expandedSections.add(section);
+    renderBookGallery();
+  }
+
+  /* ── スポットライトカード ── */
+  function bookSpotlightHtml(book) {
+    const st = SECTION_STYLE[book.section] || { cls: 'genre-default', emoji: '📖' };
+    const ratingEmoji = book.rating != null ? ` ${RATING_EMOJI[book.rating] || ''}` : '';
+    const readBadge = book.read
+      ? `<span class="book-list-read-badge">✓ 読了</span>`
+      : `<span class="book-list-unread-badge">未読</span>`;
+    return `
+      <div class="book-spotlight" onclick="openBookModal(${book.id})">
+        <div class="book-spotlight-cover ${st.cls}">
+          ${st.emoji}
+          ${book.read ? '<span class="book-read-badge" style="font-size:0.55rem;padding:2px 5px">読了</span>' : ''}
+        </div>
+        <div class="book-spotlight-info">
+          <div class="book-spotlight-title">${esc(book.title)}${ratingEmoji}</div>
+          <div class="book-spotlight-author">${esc(book.author)}</div>
+          <div class="book-spotlight-meta">${readBadge}</div>
+        </div>
+      </div>`;
+  }
+
+  function bookCardHtml(book) {
+    const st = SECTION_STYLE[book.section] || { cls: 'genre-default', emoji: '📖' };
+    const ratingDot = book.rating != null ? `<span class="book-rating-dot">${RATING_EMOJI[book.rating] || ''}</span>` : '';
+    return `
+      <div class="book-card" onclick="openBookModal(${book.id})">
+        <div class="book-cover ${st.cls}">
+          <span class="book-cover-emoji">${st.emoji}</span>
+          ${book.read ? '<span class="book-read-badge">読了</span>' : ''}
+          ${ratingDot}
+        </div>
+        <div class="book-info">
+          <div class="book-title">${esc(book.title)}</div>
+          <div class="book-author">${esc(book.author)}</div>
+        </div>
+      </div>`;
+  }
+
+  function bookListHtml(bookArr) {
+    return `<div class="book-list">${bookArr.map((book, i) => {
+      const st = SECTION_STYLE[book.section] || { cls: 'genre-default', emoji: '📖' };
+      return `
+        <div class="book-list-item${book.read ? ' is-read' : ''}" onclick="openBookModal(${book.id})">
+          <span class="book-list-num">${i + 1}</span>
+          <div class="book-list-mini-cover ${st.cls}">${st.emoji}</div>
+          <div class="book-list-info">
+            <div class="book-list-title">${esc(book.title)}</div>
+            <div class="book-list-author">${esc(book.author)}</div>
+          </div>
+          ${book.rating != null ? `<span class="book-list-rating">${RATING_EMOJI[book.rating] || ''}</span>` : ''}
+          ${book.read
+            ? `<span class="book-list-read-badge">✓ 読了</span>`
+            : `<span class="book-list-unread-badge">未読</span>`}
+        </div>`;
+    }).join('')}</div>`;
+  }
+
+  function renderBookGallery() {
+    const total = books.length;
+    const read  = books.filter(b => b.read).length;
+    document.getElementById('stat-total').textContent  = total;
+    document.getElementById('stat-read').textContent   = read;
+    document.getElementById('stat-unread').textContent = total - read;
+
+    const grid = document.getElementById('book-grid');
+    const sections = Object.keys(SECTION_STYLE);
+
+    // 検索クエリによる絞り込み
+    const q = bookSearchQuery.toLowerCase();
+    const matchSearch = b => !q ||
+      (b.title     || '').toLowerCase().includes(q) ||
+      (b.author    || '').toLowerCase().includes(q) ||
+      (b.section   || '').toLowerCase().includes(q) ||
+      (b.myReview  || '').toLowerCase().includes(q);
+
+    const renderBooks = (arr) =>
+      bookViewMode === 'list'
+        ? bookListHtml(arr)
+        : `<div class="book-grid-inner">${arr.map(bookCardHtml).join('')}</div>`;
+
+    // おすすめセクション（すべて表示・検索なしのときのみ）
+    const { lovedGenres, dislikedGenres } = getRecommendedBooks();
+    let recHtml = '';
+    if (!q && bookFilter === 'すべて' && lovedGenres.length > 0) {
+      const recBooks = books.filter(b => !b.read && lovedGenres.includes(b.section) && b.rating == null);
+      if (recBooks.length > 0) {
+        const genreLabel = lovedGenres.join('・');
+        recHtml = `
+          <div class="rec-section">
+            <div class="rec-header">⭐ あなたへのおすすめ <span class="rec-reason">${genreLabel}が好きなあなたに</span></div>
+            ${renderBooks(recBooks.slice(0, 6))}
+          </div>`;
+      }
+    }
+
+    // フラット表示（特定セクション or 読了/未読フィルター or 検索中）
+    const isFlat = bookFilter !== 'すべて' || q;
+    if (isFlat) {
+      let filtered = books;
+      if (bookFilter === '読了') filtered = filtered.filter(b => b.read);
+      else if (bookFilter === '未読') filtered = filtered.filter(b => !b.read);
+      else if (bookFilter !== 'すべて') filtered = filtered.filter(b => b.section === bookFilter);
+      filtered = filtered.filter(matchSearch);
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `<div class="gallery-empty"><span class="gallery-empty-icon">📚</span><div class="gallery-empty-text">該当する本がありません</div></div>`;
+        return;
+      }
+      const label = q ? `「${bookSearchQuery}」の検索結果 ${filtered.length}冊` : '';
+      grid.innerHTML = (label ? `<p style="font-size:0.8rem;color:#999;padding:4px 2px">${label}</p>` : '')
+        + renderBooks(filtered);
+      return;
+    }
+
+    // アコーディオン表示（すべて・検索なし）
+    // 非推奨ジャンルは後ろに並び替え
+    const sortedSections = [...sections].sort((a, b) => {
+      const aLoved = lovedGenres.includes(a) ? -1 : 0;
+      const bLoved = lovedGenres.includes(b) ? -1 : 0;
+      const aDisliked = dislikedGenres.includes(a) ? 1 : 0;
+      const bDisliked = dislikedGenres.includes(b) ? 1 : 0;
+      return (aLoved + aDisliked) - (bLoved + bDisliked);
+    });
+
+    const sectionsHtml = sortedSections.map(section => {
+      const sec = books.filter(b => b.section === section);
+      const readCnt   = sec.filter(b => b.read).length;
+      const isOpen    = openSections.has(section);
+      const isExpanded = expandedSections.has(section);
+      const st = SECTION_STYLE[section];
+      const isLoved    = lovedGenres.includes(section);
+      const isDisliked = dislikedGenres.includes(section);
+      const sectionLabel = isLoved
+        ? ` <span style="font-size:0.72rem;color:#b8860b;font-weight:700">🌟 好きなジャンル</span>`
+        : isDisliked ? ` <span style="font-size:0.72rem;color:#aaa">（優先度低め）</span>` : '';
+
+      const spotBook = getSpotlightBook(section);
+      const bodyContent = isExpanded
+        ? renderBooks(sec)
+        : (spotBook ? bookSpotlightHtml(spotBook) : '');
+
+      const sectionKey = section.replace(/'/g, "\\'");
+      return `
+      <div class="acc-section">
+        <div class="acc-header" onclick="toggleAccordion('${sectionKey}')">
+          <div class="acc-header-left">
+            <span style="font-size:1.15rem;flex-shrink:0">${st.emoji}</span>
+            <span class="acc-title">${section}</span>
+            ${sectionLabel}
+          </div>
+          <div class="acc-header-right">
+            <button class="btn-see-all${isExpanded ? ' open' : ''}"
+              onclick="toggleExpandSection('${sectionKey}', event)">
+              ${isExpanded ? '▲ 閉じる' : `すべて見る（${sec.length}冊）`}
+            </button>
+            <span class="acc-badge">${readCnt}/${sec.length}冊読了</span>
+            <span class="acc-arrow${isOpen ? ' open' : ''}">▼</span>
+          </div>
+        </div>
+        <div class="acc-body${isOpen ? ' open' : ''}">
+          ${bodyContent}
+        </div>
+      </div>`;
+    }).join('');
+
+    grid.innerHTML = recHtml + `<div class="genre-grid">${sectionsHtml}</div>`;
+  }
+
+  function openBookModal(id) {
+    const book = books.find(b => b.id === id);
+    if (!book) return;
+    activeBookId = id;
+    const st = SECTION_STYLE[book.section] || { cls: 'genre-default', emoji: '📖' };
+
+    document.getElementById('bm-cover').className = `book-modal-cover ${st.cls}`;
+    document.getElementById('bm-cover').innerHTML = `<span style="font-size:2.2rem">${st.emoji}</span>`;
+    document.getElementById('bm-title').textContent  = book.title;
+    document.getElementById('bm-author').textContent = book.author;
+    document.getElementById('bm-genre').textContent  = book.section;
+
+    let recEl = document.getElementById('bm-recommender');
+    if (!recEl) {
+      recEl = document.createElement('div');
+      recEl.id = 'bm-recommender';
+      recEl.className = 'book-modal-recommender';
+      document.getElementById('bm-genre').after(recEl);
+    }
+    recEl.textContent = book.recommender ? '👤 ' + book.recommender : '';
+
+    document.getElementById('bm-desc').textContent = book.description || '';
+
+    const amazonBtn = document.getElementById('bm-amazon');
+    amazonBtn.href = book.amazonUrl || '#';
+    amazonBtn.style.display = book.amazonUrl ? 'flex' : 'none';
+
+    const ytBtn = document.getElementById('bm-youtube');
+    ytBtn.href = book.youtubeUrl || '#';
+    ytBtn.style.display = book.youtubeUrl ? 'flex' : 'none';
+
+    const readBtn = document.getElementById('bm-read-btn');
+    readBtn.textContent = book.read ? '✓ 読了済み（タップで戻す）' : '読んだ！';
+    readBtn.className = 'btn-read-toggle' + (book.read ? ' read' : '');
+
+    // 評価ボタンの選択状態を更新
+    [5, 3, 1, -2].forEach(r => {
+      const btn = document.getElementById(`rbtn-${r}`);
+      if (btn) {
+        btn.className = 'rating-btn' + (book.rating === r ? ` active-${r}` : '');
+      }
+    });
+
+    const memo = document.getElementById('bm-myReview');
+    if (memo) memo.value = book.myReview || '';
+
+    document.getElementById('bookModal').classList.add('open');
+  }
+
+  function onBookMyReviewBlur() {
+    const book = books.find(b => b.id === activeBookId);
+    if (!book) return;
+    const el = document.getElementById('bm-myReview');
+    if (!el) return;
+    const v = el.value.trim();
+    if ((book.myReview || '').trim() === v) return;
+    book.myReview = v;
+    saveBooks();
+    showToast('✍️ 感想を保存しました');
+  }
+
+  function closeBookModal() {
+    const el = document.getElementById('bm-myReview');
+    if (el && activeBookId) {
+      const book = books.find(b => b.id === activeBookId);
+      if (book) {
+        const v = el.value.trim();
+        if ((book.myReview || '').trim() !== v) {
+          book.myReview = v;
+          saveBooks();
+        }
+      }
+    }
+    document.getElementById('bookModal').classList.remove('open');
+    activeBookId = null;
+  }
+
+  function handleBookOverlayClick(e) {
+    if (e.target === document.getElementById('bookModal')) closeBookModal();
+  }
+
+  function toggleBookRead() {
+    const book = books.find(b => b.id === activeBookId);
+    if (!book) return;
+    book.read = !book.read;
+    saveBooks();
+    showToast(book.read ? '📖 読了を記録しました' : '読了を取り消しました');
+    openBookModal(activeBookId);
+    renderBookGallery();
+  }
+
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  render();
+
+  /* ── 起動時クラウド同期（クラウド優先・キャッシュなし） ── */
+  (async () => {
+    const cloudState = await loadFromCloud();   // キャッシュなしでフェッチ
+    _cloudFetched = true;                        // 以降 saveBooks() → クラウド保存OK
+
+    if (!cloudState) {
+      setSyncStatus('offline', '⚠ オフライン（ローカルのみ）');
+      return;
+    }
+
+    const cloudTs = Number(cloudState._ts) || 0;
+    const localTs = Number(_localState._ts)  || 0;
+
+    if (cloudTs >= localTs) {
+      // ✅ クラウドが新しい（または初回）→ クラウドを適用し、bk_s と osusume_list を整合
+      _applyState(cloudState);
+      const merged = _buildState();
+      merged._ts = cloudTs;
+      _saveLocal(merged);
+      try { localStorage.setItem('osusume_list', JSON.stringify(items)); } catch(e) {}
+      renderBookGallery();
+      render();
+      setSyncStatus('ok', '✓ クラウドのデータを反映しました');
+    } else {
+      // ✅ ローカルが新しい（オフライン中に変更あり）→ 現在の状態をクラウドへ送信
+      setSyncStatus('syncing', '☁ オフライン中の変更をクラウドへ送信中…');
+      const st = _buildState();
+      await saveToCloud(st);
+      _saveLocal(st);
+      setSyncStatus('ok', '✓ ローカルの変更をクラウドに保存しました');
+    }
+  })();
+</script>
+</body>
+</html>
