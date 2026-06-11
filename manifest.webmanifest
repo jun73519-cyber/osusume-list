@@ -1,0 +1,26 @@
+{
+  "name": "おすすめリスト",
+  "short_name": "おすすめ",
+  "description": "読書リストと飲食店リストをクラウド同期で管理する自作アプリ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f2f0eb",
+  "theme_color": "#c9a96e",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

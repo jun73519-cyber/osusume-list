@@ -2,8 +2,16 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>おすすめリスト</title>
+  <meta name="theme-color" content="#c9a96e" />
+  <meta name="description" content="読書リストと飲食店リストをクラウド同期で管理する自作アプリ" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon-512.png" type="image/png" />
+  <link rel="apple-touch-icon" href="./icon-512.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="おすすめリスト" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -2765,6 +2773,14 @@
       setSyncStatus('ok', '✓ ローカルの変更をクラウドに保存しました');
     }
   })();
+</script>
+<script>
+  if ('serviceWorker' in navigator &&
+      (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function () { /* noop */ });
+    });
+  }
 </script>
 </body>
 </html>
