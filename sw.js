@@ -1,7 +1,7 @@
 // おすすめリスト Service Worker
 // アプリ本体（同一オリジンの静的ファイル）はキャッシュしてオフライン対応。
 // GAS(クラウド)へのデータ通信はキャッシュせず常に最新を取得する。
-const CACHE_NAME = 'osusume-list-v1';
+const CACHE_NAME = 'osusume-list-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -37,11 +37,26 @@ self.addEventListener('fetch', (event) => {
   // GAS など別オリジン（データ通信）は SW で触らず、ブラウザに任せる（常に最新）
   if (url.origin !== self.location.origin) return;
 
-  // アプリ本体: キャッシュ優先、無ければネットワーク、最後に index.html へフォールバック
+  // 画面遷移(HTML)はネットワーク優先 → 新デプロイを即反映。失敗時のみキャッシュにフォールバック
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put('./index.html', copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match('./index.html').then((r) => r || new Response('', { status: 503 })))
+    );
+    return;
+  }
+
+  // その他の同一オリジン資産: キャッシュ優先＋裏で更新
   event.respondWith(
     caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req)
+      const network = fetch(req)
         .then((res) => {
           if (res && res.ok) {
             const copy = res.clone();
@@ -49,12 +64,8 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => {
-          if (req.mode === 'navigate') {
-            return caches.match('./index.html').then((r) => r || new Response('', { status: 503 }));
-          }
-          return new Response('', { status: 503 });
-        });
+        .catch(() => cached || new Response('', { status: 503 }));
+      return cached || network;
     })
   );
 });
