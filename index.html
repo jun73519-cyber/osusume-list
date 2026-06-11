@@ -1436,31 +1436,6 @@
       flex-shrink: 0;
     }
     /* ══════════════════════════════
-       表紙画像（本棚風）
-    ══════════════════════════════ */
-    .cover-img {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      z-index: 0;
-      background: rgba(0,0,0,.04);
-    }
-    .book-spotlight-cover,
-    .book-list-mini-cover,
-    .book-modal-cover { position: relative; }
-    .book-spotlight-cover,
-    .book-list-mini-cover { overflow: hidden; }
-    /* 画像が載ったらバッジ類を前面へ */
-    .book-read-badge,
-    .book-rating-dot { z-index: 2; }
-    /* 表紙ロード中のふんわり表示 */
-    .cover-img { opacity: 0; transition: opacity .35s ease; }
-    .cover-img.loaded { opacity: 1; }
-
-    /* ══════════════════════════════
        ダークモード
     ══════════════════════════════ */
     :root[data-theme="dark"] {
@@ -1529,9 +1504,6 @@
     [data-theme="dark"] .rating-btn.active-3 { background: #15291a; }
     [data-theme="dark"] .rating-btn.active-1 { background: #2e2614; }
     [data-theme="dark"] .btn-see-all.open { background: #2c2418; }
-
-    /* 表紙プレースホルダ背景をダークに */
-    [data-theme="dark"] .cover-img { background: rgba(255,255,255,.04); }
   </style>
 </head>
 <body>
@@ -2663,116 +2635,6 @@
     renderBookGallery();
   }
 
-  /* ══════════════════════════════
-     📕 表紙画像（Google Books・遅延読込＋localStorageキャッシュ）
-  ══════════════════════════════ */
-  const COVER_CACHE_KEY = 'osusume-book-covers';
-  let _coverCache = null;
-  const _coverInflight = {};
-  let _coverObserver = null;
-  let _coverSaveTimer = null;
-
-  /* 429（レート制限）回避：同時実行を絞ってバーストを防ぐ簡易キュー */
-  const COVER_CONCURRENCY = 2;
-  let _coverActive = 0;
-  const _coverQueue = [];
-  function _coverPump() {
-    while (_coverActive < COVER_CONCURRENCY && _coverQueue.length) {
-      const job = _coverQueue.shift();
-      _coverActive++;
-      job().then(() => { _coverActive--; _coverPump(); },
-                () => { _coverActive--; _coverPump(); });
-    }
-  }
-  function _enqueueCover(fn) {
-    return new Promise((resolve, reject) => {
-      _coverQueue.push(() => fn().then(resolve, reject));
-      _coverPump();
-    });
-  }
-  const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-  function loadCoverCache() {
-    if (_coverCache) return _coverCache;
-    try { _coverCache = JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || '{}'); }
-    catch (e) { _coverCache = {}; }
-    return _coverCache;
-  }
-  function saveCoverCache() {
-    if (_coverSaveTimer) clearTimeout(_coverSaveTimer);
-    _coverSaveTimer = setTimeout(() => {
-      try { localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(_coverCache)); } catch (e) {}
-    }, 600);
-  }
-  function _gbQuery(q, attempt) {
-    const url = 'https://www.googleapis.com/books/v1/volumes?country=JP&maxResults=1&q=' + encodeURIComponent(q);
-    return fetch(url).then(r => {
-      if (r.status === 429 && attempt < 3) {
-        return _sleep(700 * (attempt + 1) + Math.random() * 400).then(() => _gbQuery(q, attempt + 1));
-      }
-      if (!r.ok) throw new Error('http ' + r.status);
-      return r.json();
-    }).then(data => {
-      const item  = data && data.items && data.items[0];
-      const links = item && item.volumeInfo && item.volumeInfo.imageLinks;
-      let img = links && (links.thumbnail || links.smallThumbnail);
-      return img ? img.replace(/^http:/, 'https:') : '';
-    });
-  }
-  function fetchGoogleCover(book) {
-    /* まず タイトル+著者、ヒットしなければ タイトルのみ で再検索 */
-    return _gbQuery(`intitle:${book.title} inauthor:${book.author}`, 0)
-      .then(img => img || _gbQuery(book.title, 0));
-  }
-  function getCoverUrl(book) {
-    const cache = loadCoverCache();
-    const key = String(book.id);
-    if (key in cache && cache[key]) return Promise.resolve(cache[key]);
-    if (_coverInflight[key]) return _coverInflight[key];
-    const p = _enqueueCover(() => fetchGoogleCover(book))
-      .then(u => { if (u) { cache[key] = u; saveCoverCache(); } delete _coverInflight[key]; return u || ''; })
-      .catch(() => { delete _coverInflight[key]; return ''; });
-    _coverInflight[key] = p;
-    return p;
-  }
-  function insertCover(el, url) {
-    if (!url || el.querySelector('img.cover-img')) return;
-    const img = document.createElement('img');
-    img.className = 'cover-img';
-    img.alt = '';
-    img.loading = 'lazy';
-    img.decoding = 'async';
-    img.referrerPolicy = 'no-referrer';
-    img.onload  = () => img.classList.add('loaded');
-    img.onerror = () => img.remove();
-    img.src = url;
-    el.insertBefore(img, el.firstChild);
-  }
-  function loadCoverInto(el) {
-    if (el.dataset.coverDone) return;
-    el.dataset.coverDone = '1';
-    const book = books.find(b => b.id === +el.dataset.coverId);
-    if (book) getCoverUrl(book).then(u => insertCover(el, u));
-  }
-  function hydrateBookCovers() {
-    const targets = document.querySelectorAll('#book-grid [data-cover-id]');
-    if (!('IntersectionObserver' in window)) {
-      targets.forEach(loadCoverInto);
-      return;
-    }
-    if (_coverObserver) _coverObserver.disconnect();
-    _coverObserver = new IntersectionObserver((entries, obs) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) { loadCoverInto(entry.target); obs.unobserve(entry.target); }
-      });
-    }, { rootMargin: '300px' });
-    targets.forEach(el => _coverObserver.observe(el));
-  }
-  function applyModalCover(book) {
-    const el = document.getElementById('bm-cover');
-    if (el) getCoverUrl(book).then(u => { if (activeBookId === book.id) insertCover(el, u); });
-  }
-
   /* ── スポットライトカード ── */
   function bookSpotlightHtml(book) {
     const st = SECTION_STYLE[book.section] || { cls: 'genre-default', emoji: '📖' };
@@ -2782,7 +2644,7 @@
       : `<span class="book-list-unread-badge">未読</span>`;
     return `
       <div class="book-spotlight" onclick="openBookModal(${book.id})">
-        <div class="book-spotlight-cover ${st.cls}" data-cover-id="${book.id}">
+        <div class="book-spotlight-cover ${st.cls}">
           ${st.emoji}
           ${book.read ? '<span class="book-read-badge" style="font-size:0.55rem;padding:2px 5px">読了</span>' : ''}
         </div>
@@ -2799,7 +2661,7 @@
     const ratingDot = book.rating != null ? `<span class="book-rating-dot">${RATING_EMOJI[book.rating] || ''}</span>` : '';
     return `
       <div class="book-card" onclick="openBookModal(${book.id})">
-        <div class="book-cover ${st.cls}" data-cover-id="${book.id}">
+        <div class="book-cover ${st.cls}">
           <span class="book-cover-emoji">${st.emoji}</span>
           ${book.read ? '<span class="book-read-badge">読了</span>' : ''}
           ${ratingDot}
@@ -2817,7 +2679,7 @@
       return `
         <div class="book-list-item${book.read ? ' is-read' : ''}" onclick="openBookModal(${book.id})">
           <span class="book-list-num">${i + 1}</span>
-          <div class="book-list-mini-cover ${st.cls}" data-cover-id="${book.id}">${st.emoji}</div>
+          <div class="book-list-mini-cover ${st.cls}">${st.emoji}</div>
           <div class="book-list-info">
             <div class="book-list-title">${esc(book.title)}</div>
             <div class="book-list-author">${esc(book.author)}</div>
@@ -2884,7 +2746,6 @@
       const label = q ? `「${bookSearchQuery}」の検索結果 ${filtered.length}冊` : '';
       grid.innerHTML = (label ? `<p style="font-size:0.8rem;color:#999;padding:4px 2px">${label}</p>` : '')
         + renderBooks(filtered);
-      hydrateBookCovers();
       return;
     }
 
@@ -2940,7 +2801,6 @@
     }).join('');
 
     grid.innerHTML = recHtml + `<div class="genre-grid">${sectionsHtml}</div>`;
-    hydrateBookCovers();
   }
 
   function openBookModal(id) {
@@ -2951,7 +2811,6 @@
 
     document.getElementById('bm-cover').className = `book-modal-cover ${st.cls}`;
     document.getElementById('bm-cover').innerHTML = `<span style="font-size:2.2rem">${st.emoji}</span>`;
-    applyModalCover(book);
     document.getElementById('bm-title').textContent  = book.title;
     document.getElementById('bm-author').textContent = book.author;
     document.getElementById('bm-genre').textContent  = book.section;
