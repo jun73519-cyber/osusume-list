@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>おすすめリスト</title>
-  <meta name="theme-color" content="#8a6d4b" />
+  <meta name="theme-color" content="#c9a96e" />
   <meta name="description" content="読書リストと飲食店リストをクラウド同期で管理する自作アプリ" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-512.png" type="image/png" />
@@ -26,42 +26,39 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      /* ── ウォームニュートラル配色（指定6色ベース）──
-         メイン #8a6d4b / アクセント #c17a52 / サブ #c9a96e
-         背景 #faf7f2 / 本文 #4a3d2c / カード枠線 #e8ddcd */
-      --bg:       #faf7f2;
-      --bg-grad:  #faf7f2;
-      --surface:  #ffffff;              /* カード地（背景と差をつけメリハリを維持）*/
-      --surface-2:#faf7f2;
-      --border:   #e8ddcd;              /* カード枠線 */
-      --gold:     #8a6d4b;              /* メイン（見出し・リンク等）*/
-      --gold-dk:  #6f563a;
-      --gold-lt:  #f3ece0;             /* メインの淡い地色 */
-      --text:     #4a3d2c;              /* 本文 */
-      --muted:    #8a7a63;             /* 補助テキスト（本文を薄めた暖色）*/
-      --green:    #c17a52;             /* 「行った/読了」＝アクセントに集約 */
-      --green-lt: #f6ece2;            /* アクセントの淡い地色 */
-      --red-lt:   #fdeeee;            /* 削除・エラー（注意色として維持）*/
+      --bg:       #f3f1ec;
+      --bg-grad:  radial-gradient(1200px 600px at 100% -10%, #efe9dd 0%, rgba(239,233,221,0) 60%),
+                  radial-gradient(900px 500px at -10% 0%, #eef0f4 0%, rgba(238,240,244,0) 55%),
+                  #f3f1ec;
+      --surface:  #ffffff;
+      --surface-2:#faf8f4;
+      --border:   #e8e4da;
+      --gold:     #c0974d;
+      --gold-dk:  #a87f37;
+      --gold-lt:  #f6eede;
+      --text:     #211f1c;
+      --muted:    #8a8578;
+      --green:    #3aa775;
+      --green-lt: #e9f7f0;
+      --red-lt:   #fdeeee;
       --red:      #d95f5f;
-      --map-btn:  #8a6d4b;            /* 地図ボタン＝メイン */
-      --map-btn-dk: #6f563a;
-      /* 別名（未定義による表示崩れ防止） */
-      --accent:    #c17a52;
-      --accent-dk: #a5633f;
-      --primary:   #8a6d4b;
-      --primary-lt:#f3ece0;
-      --sub:       #c9a96e;            /* サブ（控えめな要素・枠線）*/
-      --sub-lt:    #f4ecda;
+      --map-btn:  #3b6fd4;
+      --map-btn-dk: #2f5bb5;
+      /* 旧コードが参照する別名（未定義による表示崩れ防止） */
+      --accent:    #c0974d;
+      --accent-dk: #a87f37;
+      --primary:   #3b6fd4;
+      --primary-lt:#eef2fc;
       --radius:    18px;
       --radius-sm: 12px;
-      --shadow:    0 1px 2px rgba(74,61,44,.05), 0 6px 18px rgba(74,61,44,.07);
-      --shadow-lg: 0 10px 40px rgba(74,61,44,.13);
-      /* パレット内トーングラデーション */
-      --grad-brand:  linear-gradient(120deg, #8a6d4b 0%, #7d6242 100%);
-      --grad-gold:   linear-gradient(135deg, #c17a52 0%, #b06d47 100%);
-      --grad-total:  linear-gradient(140deg, #8a6d4b 0%, #9c7d57 100%);
-      --grad-read:   linear-gradient(140deg, #c17a52 0%, #cf8a63 100%);
-      --grad-unread: linear-gradient(140deg, #c9a96e 0%, #d4b880 100%);
+      --shadow:    0 1px 2px rgba(33,31,28,.04), 0 6px 18px rgba(33,31,28,.06);
+      --shadow-lg: 0 10px 40px rgba(33,31,28,.13);
+      /* ビビッド系グラデーション */
+      --grad-brand:  linear-gradient(120deg, #e7a32b 0%, #f0843c 52%, #ef5d6b 100%);
+      --grad-gold:   linear-gradient(135deg, #f0a93a 0%, #ef7d4d 100%);
+      --grad-total:  linear-gradient(140deg, #f6a623 0%, #f7c948 100%);
+      --grad-read:   linear-gradient(140deg, #1fa97c 0%, #58d39a 100%);
+      --grad-unread: linear-gradient(140deg, #3b82f6 0%, #60a5fa 100%);
     }
 
     body {
@@ -86,7 +83,7 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      box-shadow: 0 6px 22px rgba(138,109,75,.24);
+      box-shadow: 0 6px 22px rgba(239,93,107,.28);
     }
 
     .dot {
@@ -126,17 +123,17 @@
       transition: background .3s, color .3s;
     }
     #sync-indicator.idle    { display: none; }
-    #sync-indicator.syncing { background: #f3ece0; color: #8a6d4b; }
-    #sync-indicator.ok      { background: #f6ece2; color: #a5633f; }
+    #sync-indicator.syncing { background: #fff8e1; color: #b8860b; }
+    #sync-indicator.ok      { background: #eaf7f1; color: #2e7d5e; }
     #sync-indicator.offline { background: #fef0f0; color: #c0392b; }
     #sync-indicator.no-url  { display: none; }
 
     #btn-force-reload {
       margin-left: 6px;
       padding: 5px 11px;
-      background: var(--primary-lt, #f3ece0);
-      color: var(--primary, #8a6d4b);
-      border: 1.5px solid #e0d0b8;
+      background: var(--primary-lt, #eef2fc);
+      color: var(--primary, #3b6fd4);
+      border: 1.5px solid #c5d8f8;
       border-radius: 999px;
       font-size: 0.75rem;
       font-weight: 700;
@@ -145,7 +142,7 @@
       transition: background .15s, transform .1s;
       display: none;   /* GAS_URL が設定されるまで非表示 */
     }
-    #btn-force-reload:hover  { background: #e9dcc6; }
+    #btn-force-reload:hover  { background: #d6e4f7; }
     #btn-force-reload:active { transform: scale(.95); }
     #btn-force-reload.spinning { animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -247,11 +244,11 @@
     button { font-family: inherit; cursor: pointer; border: none; border-radius: 10px; font-weight: 600; transition: transform .1s, background .15s, box-shadow .15s; }
     button:active { transform: scale(.96); }
 
-    .btn-primary { background: var(--grad-gold); color: #fff; padding: 12px 24px; font-size: 0.9rem; box-shadow: 0 6px 16px rgba(193,122,82,.32); }
-    .btn-primary:hover { filter: brightness(1.05); box-shadow: 0 8px 20px rgba(193,122,82,.4); }
+    .btn-primary { background: var(--grad-gold); color: #fff; padding: 12px 24px; font-size: 0.9rem; box-shadow: 0 6px 16px rgba(239,125,77,.4); }
+    .btn-primary:hover { filter: brightness(1.05); box-shadow: 0 8px 20px rgba(239,125,77,.5); }
 
-    .btn-ghost { background: #f0e9dd; color: var(--muted); padding: 12px 20px; font-size: 0.9rem; }
-    .btn-ghost:hover { background: #e8ddcd; }
+    .btn-ghost { background: #f0ede6; color: var(--muted); padding: 12px 20px; font-size: 0.9rem; }
+    .btn-ghost:hover { background: #e6e2d8; }
 
     /* ── 検索バー ── */
     .search-wrap {
@@ -293,13 +290,13 @@
       right: 12px;
       top: 50%;
       transform: translateY(-50%);
-      background: #e8ddcd;
+      background: #e8e4dc;
       border: none;
       border-radius: 999px;
       width: 22px;
       height: 22px;
       font-size: 0.7rem;
-      color: #8a7a63;
+      color: #888;
       cursor: pointer;
       display: none;
       align-items: center;
@@ -309,7 +306,7 @@
     }
 
     .search-clear.visible { display: flex; }
-    .search-clear:hover { background: #d8c9b0; }
+    .search-clear:hover { background: #ddd; }
 
     /* ── フィルター ── */
     .filter-wrap {
@@ -349,7 +346,7 @@
       background: var(--grad-gold);
       border-color: transparent;
       color: #fff;
-      box-shadow: 0 4px 14px rgba(193,122,82,.32);
+      box-shadow: 0 4px 14px rgba(239,125,77,.4);
     }
 
     .chip-visited { }
@@ -376,7 +373,7 @@
 
     .item-card.visited {
       border-left: 4px solid var(--green);
-      background: linear-gradient(135deg, #fbf5ef 0%, #fff 100%);
+      background: linear-gradient(135deg, #f6fdf7 0%, #fff 100%);
     }
 
     @keyframes fadeUp {
@@ -405,13 +402,12 @@
       white-space: nowrap;
     }
 
-    /* カテゴリーバッジは色分けをやめ暖色1トーンに統一（区別は文字ラベルで） */
-    .badge-飲食店,
-    .badge-居酒屋,
-    .badge-カフェ・バー,
-    .badge-本,
-    .badge-食べ物,
-    .badge-その他    { background: #f3ece0; color: #8a6d4b; }
+    .badge-飲食店    { background: #fde8c8; color: #9a5800; }
+    .badge-居酒屋    { background: #fde0e0; color: #a02828; }
+    .badge-カフェ・バー { background: #ede8fd; color: #4e2fa3; }
+    .badge-本        { background: #d6eaf8; color: #1a5280; }
+    .badge-食べ物    { background: #d5f5e3; color: #196b3a; }
+    .badge-その他    { background: #eeece8; color: #666; }
 
     .card-date { font-size: 0.68rem; color: #ccc; margin-left: auto; white-space: nowrap; }
 
@@ -446,7 +442,7 @@
     }
 
     .card-name a {
-      color: var(--gold);
+      color: #2563eb;
       text-decoration: none;
       display: inline;
       position: relative;
@@ -456,7 +452,7 @@
     .card-name a:hover {
       text-decoration: underline;
       text-underline-offset: 3px;
-      color: var(--gold-dk);
+      color: #1d4ed8;
     }
 
     .card-visited-badge {
@@ -498,7 +494,7 @@
       border-color: transparent;
       color: #fff;
       font-weight: 700;
-      box-shadow: 0 3px 12px rgba(193,122,82,.3);
+      box-shadow: 0 3px 12px rgba(239,125,77,.36);
     }
 
     /* ── リスト表示 ── */
@@ -508,14 +504,14 @@
       align-items: center;
       gap: 10px;
       padding: 10px 12px;
-      border-bottom: 1px solid #efe7d9;
+      border-bottom: 1px solid #f0ede6;
       cursor: pointer;
       transition: background .15s;
       border-radius: 0;
     }
     .book-list-item:first-child { border-radius: 12px 12px 0 0; }
     .book-list-item:last-child  { border-bottom: none; border-radius: 0 0 12px 12px; }
-    .book-list-item:hover { background: #faf7f2; }
+    .book-list-item:hover { background: #faf8f4; }
     .book-list-item.is-read { opacity: .65; }
     .book-list-num {
       font-size: 0.72rem;
@@ -550,8 +546,8 @@
     }
     .book-list-read-badge {
       font-size: 0.68rem;
-      background: #f6ece2;
-      color: #a5633f;
+      background: #d4edda;
+      color: #155724;
       border-radius: 999px;
       padding: 2px 7px;
       font-weight: 700;
@@ -559,8 +555,8 @@
     }
     .book-list-unread-badge {
       font-size: 0.68rem;
-      background: #f4ecda;
-      color: #8a6d4b;
+      background: #e8f4fd;
+      color: #1a6fa8;
       border-radius: 999px;
       padding: 2px 7px;
       font-weight: 700;
@@ -578,24 +574,24 @@
       font-weight: 700;
       margin-bottom: 4px;
     }
-    .tag-chain    { background: #f4ecda; color: #8a6d4b; }
-    .tag-delivery { background: #f6ece2; color: #a5633f; }
+    .tag-chain    { background: #fff3cd; color: #856404; }
+    .tag-delivery { background: #d4edda; color: #155724; }
 
     .card-review {
       font-size: 0.85rem;
-      color: #6b5c45;
+      color: #555;
       line-height: 1.65;
       white-space: pre-wrap;
       word-break: break-word;
     }
     .card-my-review {
       font-size: 0.83rem;
-      color: #6f563a;
+      color: #5a7a5a;
       line-height: 1.6;
       white-space: pre-wrap;
       word-break: break-word;
-      background: #faf3ec;
-      border-left: 3px solid #c9a96e;
+      background: #f0f7f0;
+      border-left: 3px solid #7bbf7b;
       border-radius: 0 6px 6px 0;
       padding: 6px 10px;
       margin-top: 6px;
@@ -603,7 +599,7 @@
     .card-my-review-label {
       font-size: 0.68rem;
       font-weight: 700;
-      color: #a5633f;
+      color: #5a9a5a;
       margin-bottom: 2px;
       display: block;
     }
@@ -648,7 +644,7 @@
       padding: 13px 16px;
       background: var(--green-lt);
       color: var(--green);
-      border: 1.5px solid #e6cdb8;
+      border: 1.5px solid #b5e8d3;
       border-radius: 12px;
       font-size: 0.88rem;
       font-weight: 600;
@@ -657,7 +653,7 @@
     }
 
     .btn-visit:active { transform: scale(.96); }
-    .btn-visit:hover { background: #f0ddcc; }
+    .btn-visit:hover { background: #d5f2e7; }
 
     .btn-visit.done {
       background: var(--green);
@@ -673,8 +669,8 @@
       justify-content: center;
       gap: 6px;
       padding: 13px 16px;
-      background: #f0e9dd;
-      color: #b3a58c;
+      background: #f0ede6;
+      color: #ccc;
       border-radius: 12px;
       font-size: 0.88rem;
       font-weight: 600;
@@ -725,7 +721,7 @@
       padding: 12px 16px;
       background: var(--green-lt);
       color: var(--green);
-      border: 1.5px solid #e6cdb8;
+      border: 1.5px solid #b5e8d3;
       border-radius: 12px;
       font-size: 0.88rem;
       font-weight: 600;
@@ -734,7 +730,7 @@
     }
 
     .btn-visit-full:active { transform: scale(.96); }
-    .btn-visit-full:hover  { background: #f0ddcc; }
+    .btn-visit-full:hover  { background: #d5f2e7; }
 
     .btn-visit-full.done {
       background: var(--green);
@@ -840,8 +836,8 @@
     }
 
     .tab-btn.active {
-      color: #8a6d4b;
-      border-bottom-color: #8a6d4b;
+      color: #ef7d4d;
+      border-bottom-color: #ef7d4d;
     }
 
     .tab-section { display: none; }
@@ -952,16 +948,15 @@
     }
 
     /* ジャンル別グラデーション */
-    /* 表紙グラデはパレット内の濃淡バリエーションに統一（ジャンル差はトーンで表現） */
-    .book-cover.genre-psychology  { background: linear-gradient(145deg, #8a6d4b, #6f563a); }
-    .book-cover.genre-business    { background: linear-gradient(145deg, #c17a52, #a5633f); }
-    .book-cover.genre-money       { background: linear-gradient(145deg, #c9a96e, #b8945a); }
-    .book-cover.genre-philosophy  { background: linear-gradient(145deg, #9c7d57, #7d6242); }
-    .book-cover.genre-lifestyle   { background: linear-gradient(145deg, #cf8a63, #b06d47); }
-    .book-cover.genre-career      { background: linear-gradient(145deg, #a0855e, #82683f); }
-    .book-cover.genre-thinking    { background: linear-gradient(145deg, #d4b880, #c2a066); }
-    .book-cover.genre-mental      { background: linear-gradient(145deg, #b89a6a, #9c7d57); }
-    .book-cover.genre-default     { background: linear-gradient(145deg, #b49a72, #8a6d4b); }
+    .book-cover.genre-psychology  { background: linear-gradient(145deg, #667eea, #764ba2); }
+    .book-cover.genre-business    { background: linear-gradient(145deg, #f093fb, #f5576c); }
+    .book-cover.genre-money       { background: linear-gradient(145deg, #4facfe, #00f2fe); }
+    .book-cover.genre-philosophy  { background: linear-gradient(145deg, #43e97b, #38f9d7); }
+    .book-cover.genre-lifestyle   { background: linear-gradient(145deg, #fa709a, #fee140); }
+    .book-cover.genre-career      { background: linear-gradient(145deg, #a18cd1, #fbc2eb); }
+    .book-cover.genre-thinking    { background: linear-gradient(145deg, #ffecd2, #fcb69f); }
+    .book-cover.genre-mental      { background: linear-gradient(145deg, #a1c4fd, #c2e9fb); }
+    .book-cover.genre-default     { background: linear-gradient(145deg, #d4b896, #c9a96e); }
 
     .book-cover img {
       width: 100%;
@@ -1023,8 +1018,8 @@
       font-weight: 700;
       padding: 2px 7px;
       border-radius: 999px;
-      background: #f3ece0;
-      color: #8a6d4b;
+      background: #f0ede6;
+      color: #888;
       margin-top: 2px;
       white-space: nowrap;
       overflow: hidden;
@@ -1109,7 +1104,7 @@
       font-family: inherit;
       font-size: 0.9rem;
       font-weight: 700;
-      border: 1.5px solid #e6cdb8;
+      border: 1.5px solid #b5e8d3;
       background: var(--green-lt);
       color: var(--green);
       cursor: pointer;
@@ -1141,8 +1136,8 @@
       box-sizing: border-box;
       background: var(--surface);
       border-radius: 14px;
-      box-shadow: var(--shadow);
-      border: 1px solid var(--border);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      border: 1px solid #ece8df;
       overflow: visible;
       position: relative;
     }
@@ -1159,11 +1154,11 @@
       box-sizing: border-box;
       cursor: pointer;
       user-select: none;
-      border-bottom: 1px solid #efe7d9;
+      border-bottom: 1px solid #f0ede6;
       transition: background .15s;
       border-radius: 14px 14px 0 0;
     }
-    .acc-header:hover { background: #faf7f2; }
+    .acc-header:hover { background: #faf8f4; }
 
     .acc-header-left {
       display: flex;
@@ -1251,7 +1246,7 @@
       align-items: center;
       gap: 4px;
       padding: 10px 4px;
-      border: 2px solid #e8ddcd;
+      border: 2px solid #e8e4de;
       border-radius: 12px;
       background: var(--surface);
       cursor: pointer;
@@ -1268,9 +1263,9 @@
       line-height: 1.2;
     }
     .rating-btn:hover { border-color: var(--accent); transform: scale(1.04); }
-    .rating-btn.active-5  { border-color: #c17a52; background: #f6ece2; }
-    .rating-btn.active-3  { border-color: #c9a96e; background: #f7f0e2; }
-    .rating-btn.active-1  { border-color: #b49a72; background: #f3ede2; }
+    .rating-btn.active-5  { border-color: #f4c430; background: #fffbea; }
+    .rating-btn.active-3  { border-color: #5cb85c; background: #f0fff0; }
+    .rating-btn.active-1  { border-color: #f0ad4e; background: #fff8ee; }
 
     /* ── スポットライトカード（1冊表示） ── */
     .book-spotlight {
@@ -1280,14 +1275,14 @@
       gap: 14px;
       width: 100%;
       box-sizing: border-box;
-      background: #faf7f2;
+      background: #faf8f4;
       border-radius: 10px;
       padding: 12px 10px;
       cursor: pointer;
       margin-bottom: 0;
       transition: background .15s;
     }
-    .book-spotlight:hover { background: #f0e9dd; }
+    .book-spotlight:hover { background: #f3efe6; }
     .book-spotlight-cover {
       width: 72px;
       min-width: 72px;
@@ -1344,12 +1339,12 @@
       line-height: 1.6;
     }
     .btn-see-all:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-see-all.open  { border-color: var(--accent); color: var(--accent); background: #f6ece2; }
+    .btn-see-all.open  { border-color: var(--accent); color: var(--accent); background: #fdf6ee; }
 
     /* ── おすすめセクション ── */
     .rec-section {
-      background: linear-gradient(135deg, #faf3ea 0%, #f6ece2 100%);
-      border: 2px solid #c9a96e;
+      background: linear-gradient(135deg, #fffbea 0%, #fff8dc 100%);
+      border: 2px solid #f4c430;
       border-radius: 16px;
       padding: 14px;
       margin-bottom: 18px;
@@ -1357,7 +1352,7 @@
     .rec-header {
       font-size: 0.9rem;
       font-weight: 800;
-      color: #8a6d4b;
+      color: #b8860b;
       margin-bottom: 10px;
       display: flex;
       align-items: center;
@@ -1365,7 +1360,7 @@
     }
     .rec-reason {
       font-size: 0.7rem;
-      color: #a5633f;
+      color: #a07800;
       background: rgba(255,255,255,0.6);
       border-radius: 999px;
       padding: 2px 8px;
@@ -1434,8 +1429,8 @@
       border-radius: 999px;
       font-size: 0.66rem;
       font-weight: 600;
-      background: #f3ece0;
-      color: #8a7a63;
+      background: #f0ede6;
+      color: #999;
       white-space: nowrap;
       margin-top: 3px;
       flex-shrink: 0;
@@ -1673,7 +1668,7 @@
       <span class="chip" data-bfilter="時間術・マインドセット・教養" onclick="setBookFilter(this)">時間術・教養</span>
       <span class="chip" data-bfilter="哲学・心理学・生き方" onclick="setBookFilter(this)">哲学・生き方</span>
       <span class="chip chip-visited" onclick="setBookFilter(this)" data-bfilter="読了">✓ 読了のみ</span>
-      <span class="chip chip-visited" onclick="setBookFilter(this)" data-bfilter="未読" style="background:#f4ecda;color:#8a6d4b">📖 未読のみ</span>
+      <span class="chip chip-visited" onclick="setBookFilter(this)" data-bfilter="未読" style="background:#e8f4fd;color:#1a6fa8">📖 未読のみ</span>
     </div>
 
     <!-- 本グリッド -->
@@ -2773,7 +2768,7 @@
       const isLoved    = lovedGenres.includes(section);
       const isDisliked = dislikedGenres.includes(section);
       const sectionLabel = isLoved
-        ? ` <span style="font-size:0.72rem;color:#a5633f;font-weight:700">🌟 好きなジャンル</span>`
+        ? ` <span style="font-size:0.72rem;color:#b8860b;font-weight:700">🌟 好きなジャンル</span>`
         : isDisliked ? ` <span style="font-size:0.72rem;color:#aaa">（優先度低め）</span>` : '';
 
       const spotBook = getSpotlightBook(section);
