@@ -271,10 +271,11 @@
       color: #bbb;
     }
 
-    .search-input {
+    /* 詳細度を上げて input[type="text"] の padding 指定に確実に勝たせる（左パディングを効かせる） */
+    .search-wrap .search-input {
       width: 100%;
       /* 左パディング = アイコンの左位置(12px)＋アイコン枠(24px)＋余白 → テキストは必ずアイコンの右から始まる */
-      padding: 13px 40px 13px 44px;
+      padding: 13px 40px 13px 42px;
       border: 1.5px solid var(--border);
       border-radius: 12px;
       font-size: 1rem;
@@ -287,7 +288,7 @@
       -webkit-appearance: none;
     }
 
-    .search-input:focus {
+    .search-wrap .search-input:focus {
       border-color: var(--gold);
       box-shadow: 0 0 0 3px rgba(201,169,110,.14);
     }
