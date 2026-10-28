@@ -1537,7 +1537,13 @@
       display: flex; align-items: center; gap: 10px; padding: 10px 6px;
       border-top: 1px solid var(--border); color: var(--text); text-decoration: none;
     }
+    .nearby-item { cursor: pointer; }
     .nearby-item:hover { background: var(--surface-2); }
+    .item-card.flash { animation: card-flash 1.6s ease-out; }
+    @keyframes card-flash {
+      0%, 30% { box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
+      100%    { box-shadow: var(--shadow); }
+    }
     .nearby-main { flex: 1; min-width: 0; }
     .nearby-name { font-weight: 700; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nearby-sub { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2151,7 +2157,7 @@
         : '';
 
       return `
-      <div class="item-card${item.visited ? ' visited' : ''}">
+      <div class="item-card${item.visited ? ' visited' : ''}" id="card-${item.id}">
         <div class="card-head">
           <span class="badge badge-${esc(item.category)}">${esc(item.category)}</span>
           ${item.subGenre ? `<span class="sub-genre-badge">${esc(item.subGenre)}</span>` : ''}
@@ -2560,6 +2566,23 @@
     document.getElementById('nearbyPanel').classList.remove('open');
   }
 
+  /* 一覧の行タップ → リスト内のそのお店のカードへスクロールして強調（地図は店名タップで開く） */
+  function openShopCard(id) {
+    let card = document.getElementById('card-' + id);
+    if (!card) {   // フィルター・検索で隠れていたら解除して表示
+      currentFilter = 'すべて';
+      showVisitedOnly = false;
+      document.querySelectorAll('#filters .chip').forEach(c => c.classList.toggle('active', c.dataset.filter === 'すべて'));
+      clearSearch();   // render() も呼ばれる
+      card = document.getElementById('card-' + id);
+    }
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.remove('flash');
+    void card.offsetWidth;   // アニメーションを再始動
+    card.classList.add('flash');
+  }
+
   function renderNearby(pos, places, offline) {
     const nowMin = _jstNowMin();
     const open = [], unknown = [];
@@ -2578,13 +2601,11 @@
     unknown.sort((a, b) => a.km - b.km);
 
     const rowHtml = r => {
-      const url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(r.p.googleName || r.it.name) +
-                  '&query_place_id=' + encodeURIComponent(r.p.placeId);
       const sub = r.p.googleName && r.p.googleName !== r.it.name
         ? 'Google: ' + r.p.googleName
         : (r.it.subGenre || r.it.category || '');
       return `
-      <a class="nearby-item" href="${esc(url)}" target="_blank" rel="noopener noreferrer">
+      <div class="nearby-item" role="button" tabindex="0" onclick="openShopCard(${Number(r.it.id)})">
         <div class="nearby-main">
           <div class="nearby-name">${esc(r.it.name)}</div>
           <div class="nearby-sub">${esc(sub)}</div>
@@ -2593,7 +2614,7 @@
           <div class="nearby-dist">${_fmtKm(r.km)}</div>
           ${r.until ? `<div class="nearby-until">${esc(r.until)}</div>` : ''}
         </div>
-      </a>`;
+      </div>`;
     };
 
     const nowLabel = Math.floor((nowMin % DAY_MIN) / 60) + ':' + String(nowMin % 60).padStart(2, '0');
