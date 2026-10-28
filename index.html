@@ -1533,17 +1533,22 @@
     .nearby-title { flex: 1; font-weight: 700; color: var(--text); font-size: 0.95rem; }
     .nearby-status { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
     .nearby-section { font-size: 0.78rem; font-weight: 700; color: var(--muted); margin: 12px 0 4px; }
+    .nearby-entry { border-top: 1px solid var(--border); }
     .nearby-item {
       display: flex; align-items: center; gap: 10px; padding: 10px 6px;
-      border-top: 1px solid var(--border); color: var(--text); text-decoration: none;
+      color: var(--text); cursor: pointer;
     }
-    .nearby-item { cursor: pointer; }
-    .nearby-item:hover { background: var(--surface-2); }
-    .item-card.flash { animation: card-flash 1.6s ease-out; }
-    @keyframes card-flash {
-      0%, 30% { box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
-      100%    { box-shadow: var(--shadow); }
-    }
+    .nearby-item:hover, .nearby-entry.open .nearby-item { background: var(--surface-2); }
+    .nearby-chev { color: var(--muted); font-size: 0.8rem; transition: transform .2s; }
+    .nearby-entry.open .nearby-chev { transform: rotate(180deg); }
+    .nearby-detail { display: none; padding: 8px 10px 14px; background: var(--surface-2); }
+    .nearby-entry.open .nearby-detail { display: block; }
+    .nearby-detail > * + * { margin-top: 6px; }
+    .nearby-detail-name { font-weight: 700; font-size: 0.95rem; }
+    .nearby-detail-name a { color: var(--gold); text-decoration: underline; }
+    .nearby-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .nearby-visited { font-size: 0.72rem; font-weight: 700; color: var(--accent); }
+    .nearby-detail-yt { display: inline-block; font-size: 0.8rem; color: var(--accent); }
     .nearby-main { flex: 1; min-width: 0; }
     .nearby-name { font-weight: 700; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nearby-sub { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2157,7 +2162,7 @@
         : '';
 
       return `
-      <div class="item-card${item.visited ? ' visited' : ''}" id="card-${item.id}">
+      <div class="item-card${item.visited ? ' visited' : ''}">
         <div class="card-head">
           <span class="badge badge-${esc(item.category)}">${esc(item.category)}</span>
           ${item.subGenre ? `<span class="sub-genre-badge">${esc(item.subGenre)}</span>` : ''}
@@ -2566,21 +2571,45 @@
     document.getElementById('nearbyPanel').classList.remove('open');
   }
 
-  /* 一覧の行タップ → リスト内のそのお店のカードへスクロールして強調（地図は店名タップで開く） */
-  function openShopCard(id) {
-    let card = document.getElementById('card-' + id);
-    if (!card) {   // フィルター・検索で隠れていたら解除して表示
-      currentFilter = 'すべて';
-      showVisitedOnly = false;
-      document.querySelectorAll('#filters .chip').forEach(c => c.classList.toggle('active', c.dataset.filter === 'すべて'));
-      clearSearch();   // render() も呼ばれる
-      card = document.getElementById('card-' + id);
-    }
-    if (!card) return;
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    card.classList.remove('flash');
-    void card.offsetWidth;   // アニメーションを再始動
-    card.classList.add('flash');
+  /* 一覧の行タップ → その行の下にお店の情報を開く（見るだけ。開くのは1件だけ、再タップで閉じる） */
+  function toggleNearbyDetail(id) {
+    const list = document.getElementById('nearbyList');
+    const entry = list.querySelector('.nearby-entry[data-id="' + id + '"]');
+    if (!entry) return;
+    const wasOpen = entry.classList.contains('open');
+    list.querySelectorAll('.nearby-entry.open').forEach(e => {
+      e.classList.remove('open');
+      e.querySelector('.nearby-detail').innerHTML = '';
+    });
+    if (wasOpen) return;
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    entry.querySelector('.nearby-detail').innerHTML = _nearbyDetailHtml(item);
+    entry.classList.add('open');
+  }
+
+  /* 店名タップで地図：カードと同じ mapUrl を優先、無ければ placeId から */
+  function _nearbyDetailHtml(item) {
+    const p = _loadPlaces()['i_' + item.id] || {};
+    const mapUrl = safeUrl(item.mapUrl) || (p.placeId
+      ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.googleName || item.name) +
+        '&query_place_id=' + encodeURIComponent(p.placeId)
+      : '');
+    const ytUrl = safeUrl(item.youtubeUrl);
+    return `
+      <div class="nearby-detail-name">${mapUrl
+        ? `<a href="${esc(mapUrl)}" target="_blank" rel="noopener noreferrer">${esc(item.name)} 🗺</a>`
+        : esc(item.name)}</div>
+      <div class="nearby-detail-tags">
+        <span class="badge badge-${esc(item.category)}">${esc(item.category)}</span>
+        ${item.subGenre ? `<span class="sub-genre-badge">${esc(item.subGenre)}</span>` : ''}
+        ${item.visited ? '<span class="nearby-visited">✓ 行った</span>' : ''}
+      </div>
+      ${item.recommender ? `<div class="card-meta">👤 ${esc(item.recommender)}</div>` : ''}
+      ${item.address ? `<div class="card-address">📍 ${esc(item.address)}</div>` : ''}
+      ${item.review ? `<div class="card-review">💬 ${esc(item.review)}</div>` : ''}
+      ${item.myReview ? `<div class="card-my-review"><span class="card-my-review-label">✍️ 自分の感想</span>${esc(item.myReview)}</div>` : ''}
+      ${ytUrl ? `<a class="nearby-detail-yt" href="${esc(ytUrl)}" target="_blank" rel="noopener noreferrer">▶ 紹介動画</a>` : ''}`;
   }
 
   function renderNearby(pos, places, offline) {
@@ -2604,16 +2633,21 @@
       const sub = r.p.googleName && r.p.googleName !== r.it.name
         ? 'Google: ' + r.p.googleName
         : (r.it.subGenre || r.it.category || '');
+      const id = Number(r.it.id);
       return `
-      <div class="nearby-item" role="button" tabindex="0" onclick="openShopCard(${Number(r.it.id)})">
-        <div class="nearby-main">
-          <div class="nearby-name">${esc(r.it.name)}</div>
-          <div class="nearby-sub">${esc(sub)}</div>
+      <div class="nearby-entry" data-id="${id}">
+        <div class="nearby-item" role="button" tabindex="0" onclick="toggleNearbyDetail(${id})">
+          <div class="nearby-main">
+            <div class="nearby-name">${esc(r.it.name)}</div>
+            <div class="nearby-sub">${esc(sub)}</div>
+          </div>
+          <div class="nearby-side">
+            <div class="nearby-dist">${_fmtKm(r.km)}</div>
+            ${r.until ? `<div class="nearby-until">${esc(r.until)}</div>` : ''}
+          </div>
+          <span class="nearby-chev">▾</span>
         </div>
-        <div class="nearby-side">
-          <div class="nearby-dist">${_fmtKm(r.km)}</div>
-          ${r.until ? `<div class="nearby-until">${esc(r.until)}</div>` : ''}
-        </div>
+        <div class="nearby-detail"></div>
       </div>`;
     };
 
