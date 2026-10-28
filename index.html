@@ -1532,16 +1532,26 @@
     .nearby-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .nearby-title { flex: 1; font-weight: 700; color: var(--text); font-size: 0.95rem; }
     .nearby-status { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
-    .nearby-section { font-size: 0.78rem; font-weight: 700; color: var(--muted); margin: 12px 0 4px; }
+    .nearby-group { margin-top: 12px; border-radius: var(--radius-sm); overflow: hidden; }
+    .nearby-group-open    { background: var(--green-lt);  border: 1.5px solid var(--accent); }
+    .nearby-group-unknown { background: var(--surface-2); border: 1.5px dashed var(--sub); }
+    .nearby-group-head {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+      padding: 9px 12px; font-size: 0.85rem; font-weight: 700; color: var(--text);
+    }
+    .nearby-group-open .nearby-group-head { color: var(--accent); }
+    .nearby-group-sub { font-size: 0.72rem; font-weight: 400; color: var(--muted); }
+    .nearby-group .nearby-item { padding: 10px 12px; }
+    .nearby-group .nearby-note { padding: 4px 12px 12px; }
     .nearby-entry { border-top: 1px solid var(--border); }
     .nearby-item {
       display: flex; align-items: center; gap: 10px; padding: 10px 6px;
       color: var(--text); cursor: pointer;
     }
-    .nearby-item:hover, .nearby-entry.open .nearby-item { background: var(--surface-2); }
+    .nearby-item:hover, .nearby-entry.open .nearby-item { background: var(--surface); }
     .nearby-chev { color: var(--muted); font-size: 0.8rem; transition: transform .2s; }
     .nearby-entry.open .nearby-chev { transform: rotate(180deg); }
-    .nearby-detail { display: none; padding: 8px 10px 14px; background: var(--surface-2); }
+    .nearby-detail { display: none; padding: 8px 12px 14px; background: var(--surface); }
     .nearby-entry.open .nearby-detail { display: block; }
     .nearby-detail > * + * { margin-top: 6px; }
     .nearby-detail-name { font-weight: 700; font-size: 0.95rem; }
@@ -2496,6 +2506,20 @@
     return out;
   }
 
+  /* 判定に使う営業時間を選ぶ
+     ① currentOpeningHours（臨時休業・祝日を反映、取得日から7日分）が今をカバーしていればそれ
+     ② 古い・無い場合は regularOpeningHours（毎週の通常営業）
+     ③ どちらも無ければ null＝営業時間不明 */
+  function _hoursSource(p, nowMin) {
+    if (Array.isArray(p.periods) && p.hoursFetchedAt) {
+      const fetchMin = Math.floor((p.hoursFetchedAt + 9 * 3600000) / 60000);
+      const validUntil = fetchMin - (fetchMin % DAY_MIN) + 7 * DAY_MIN;
+      if (nowMin < validUntil) return { periods: p.periods, regular: false };
+    }
+    if (Array.isArray(p.regularPeriods) && p.regularPeriods.length) return { periods: p.regularPeriods, regular: true };
+    return null;
+  }
+
   /* 営業中なら閉店時刻（分）、営業時間外なら null */
   function _openUntil(periods, nowMin) {
     const iv = _intervals(periods, nowMin);
@@ -2633,10 +2657,11 @@
       const p = places['i_' + it.id];
       if (!p || p.status !== 'OK' || p.lat == null || p.lng == null) { noCoord++; return; }
       const row = { it, p, km: _distKm(pos.latitude, pos.longitude, p.lat, p.lng) };
-      if (!Array.isArray(p.periods) || !p.periods.length) { unknown.push(row); return; }
-      const end = _openUntil(p.periods, nowMin);
+      const src = _hoursSource(p, nowMin);
+      if (!src) { unknown.push(row); return; }
+      const end = _openUntil(src.periods, nowMin);   // periods が空（臨時休業など）なら営業時間外
       if (end == null) { closed++; return; }
-      row.until = _untilLabel(end, nowMin);
+      row.until = _untilLabel(end, nowMin) + (src.regular ? '（通常時間）' : '');
       open.push(row);
     });
     open.sort((a, b) => a.km - b.km);
@@ -2668,11 +2693,18 @@
     document.getElementById('nearbyStatus').textContent =
       nowLabel + ' 時点 ・ 営業中 ' + open.length + ' 件' + (offline ? '（⚠ オフラインのため保存済みデータで判定）' : '');
 
-    let html = '<div class="nearby-section">🟢 いま営業中</div>';
-    html += open.length ? open.map(rowHtml).join('') : '<div class="nearby-note">近くに営業中のお店はありません</div>';
+    let html = `
+      <div class="nearby-group nearby-group-open">
+        <div class="nearby-group-head">🟢 いま営業中（${open.length}件）</div>
+        ${open.length ? open.map(rowHtml).join('') : '<div class="nearby-note">近くに営業中のお店はありません</div>'}
+      </div>`;
     if (unknown.length) {
-      html += '<div class="nearby-section">❔ 営業時間不明</div>';
-      html += unknown.slice(0, NEARBY_UNKNOWN_MAX).map(rowHtml).join('');
+      html += `
+      <div class="nearby-group nearby-group-unknown">
+        <div class="nearby-group-head">❔ 営業時間不明（${unknown.length}件）${unknown.length > NEARBY_UNKNOWN_MAX
+          ? `<span class="nearby-group-sub">近い順に${NEARBY_UNKNOWN_MAX}件を表示</span>` : ''}</div>
+        ${unknown.slice(0, NEARBY_UNKNOWN_MAX).map(rowHtml).join('')}
+      </div>`;
     }
     const notes = [];
     if (closed)  notes.push('営業時間外 ' + closed + ' 件は非表示');
@@ -2687,12 +2719,15 @@
     if (p.status === 'SKIPPED')   return '<span class="muted">住所が「デリバリー」「全国チェーン」等のため取得していません</span>';
     if (p.status === 'NOT_FOUND') return '<span class="muted">⚠ Google で見つかりませんでした。検索語を入れて再取得してください</span>';
     if (p.status === 'ERROR')     return '<span class="muted">⚠ 取得エラー。再取得してください</span>';
-    const hours = Array.isArray(p.periods) && p.periods.length ? '営業時間あり' : '営業時間不明';
+    const hours = Array.isArray(p.periods)
+      ? (p.periods.length ? '営業時間あり（臨時休業・祝日も反映）' : '直近7日は営業予定なし（臨時休業など）')
+      : (Array.isArray(p.regularPeriods) && p.regularPeriods.length ? '営業時間あり（通常の営業時間のみ）' : '営業時間不明');
     const at = p.hoursFetchedAt
       ? '（' + new Date(p.hoursFetchedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' 取得）'
       : '';
     return `<strong>${esc(p.googleName)}</strong>${p.manual ? ' <span class="muted">（検索語を手動指定）</span>' : ''}<br>` +
-           `<span class="muted">${esc(p.googleAddress)}<br>${hours}${at}</span>`;
+           `<span class="muted">${esc(p.googleAddress)}<br>${hours}${at}</span>` +
+           (p.hoursError ? `<br><span class="muted">⚠ 前回の営業時間の取得に失敗：${esc(p.hoursError)}</span>` : '');
   }
 
   function renderEditPlace(item) {
