@@ -1552,7 +1552,9 @@
       display: flex; align-items: center; gap: 10px; padding: 10px 6px;
       color: var(--text); cursor: pointer;
     }
-    .nearby-item:hover, .nearby-entry.open .nearby-item { background: var(--surface); }
+    .nearby-entry.open .nearby-item { background: var(--surface); }
+    /* マウスを乗せたときの色は PC だけ（スマホはタップ後に :hover が残り、閉じた行まで白くなるため） */
+    @media (hover: hover) { .nearby-item:hover { background: var(--surface); } }
     .nearby-chev { color: var(--muted); font-size: 0.8rem; transition: transform .2s; }
     .nearby-entry.open .nearby-chev { transform: rotate(180deg); }
     .nearby-detail { display: none; padding: 8px 12px 14px; background: var(--surface); }
