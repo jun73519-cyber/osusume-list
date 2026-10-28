@@ -160,17 +160,21 @@ function doPost(e) {
 const PLACES_SHEET_NAME = 'ShopPlaces';
 const PLACES_HEADER = [
   'key', 'placeId', 'googleName', 'googleAddress', 'lat', 'lng', 'status',
-  'query', 'manual', 'placeFetchedAt', 'hoursJson', 'hoursFetchedAt'
+  'query', 'manual', 'placeFetchedAt', 'hoursJson', 'hoursFetchedAt',
+  'regularHoursJson', 'hoursError'   // 後から追加した列（既存列の並びは変えない）
 ];
 const MAX_SEARCH_PER_CALL = 20;   // 1回の呼び出しで Text Search する最大件数
 const MAX_DETAILS_PER_CALL = 20;  // 1回の呼び出しで営業時間を再取得する最大件数（近い順）
 const MAX_SHOPS_PER_CALL = 2000;  // 受け付けるお店一覧の上限
 const HOURS_TTL_MS = 24 * 60 * 60 * 1000;
+const DAILY_DETAILS_LIMIT = 300;  // Details の1日の上限（日本時間で日付が変わるとリセット）
+const BULK_DETAILS_RESERVE = 40;  // 一括取得では使わず「近くの〜」用に残す回数
 // 場所を特定できない住所（検索しない）
 const SKIP_ADDRESS_RE = /デリバリー|全国チェーン|全国展開|オンライン|通販/;
 // 検索フィールド（料金を抑えるため必要な項目だけ）
 const SEARCH_FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.location';
-const DETAILS_FIELD_MASK = 'currentOpeningHours';
+// currentOpeningHours（臨時休業・祝日を反映した直近7日分）と regularOpeningHours（毎週の通常営業）は同じ料金区分
+const DETAILS_FIELD_MASK = 'currentOpeningHours,regularOpeningHours';
 
 /** _action ごとの振り分け（未知の _action もエラーで返し、BookState 処理には流さない） */
 function handlePlacesAction_(incoming) {
@@ -191,6 +195,28 @@ function getPlacesApiKey_() {
   var key = PropertiesService.getScriptProperties().getProperty('PLACES_API_KEY');
   if (!key) throw new Error('PLACES_API_KEY が未設定です');
   return key;
+}
+
+/** 今日（日本時間）の Details 呼び出し回数。スクリプトプロパティ DETAILS_QUOTA に {date, count} で保存 */
+function getDetailsUsed_() {
+  var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  var q = parseJsonOrNull_(PropertiesService.getScriptProperties().getProperty('DETAILS_QUOTA')) || {};
+  return q.date === today ? (Number(q.count) || 0) : 0;
+}
+
+function addDetailsUsed_(n) {
+  if (!n) return;
+  var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  PropertiesService.getScriptProperties().setProperty('DETAILS_QUOTA',
+    JSON.stringify({ date: today, count: getDetailsUsed_() + n }));
+}
+
+/** Details をまとめて取得して反映し、回数を記録 */
+function fetchDetailsFor_(apiKey, recs, now) {
+  if (!recs.length) return;
+  var res = fetchAllSafe_(recs.map(function (rec) { return detailsRequest_(apiKey, rec.placeId); }));
+  recs.forEach(function (rec, i) { applyDetailsResult_(rec, res[i], now); });
+  addDetailsUsed_(recs.length);
 }
 
 function getOrCreatePlacesSheet_() {
@@ -241,6 +267,7 @@ function writePlaces_(sheet, map) {
     sheet.getRange(2, 1, out.length, 4).setNumberFormat('@');
     sheet.getRange(2, 8, out.length, 1).setNumberFormat('@');
     sheet.getRange(2, 11, out.length, 1).setNumberFormat('@');
+    sheet.getRange(2, 13, out.length, 2).setNumberFormat('@');
     sheet.getRange(2, 1, out.length, PLACES_HEADER.length).setValues(out);
   }
 }
@@ -296,10 +323,18 @@ function detailsRequest_(apiKey, placeId) {
   };
 }
 
-/** Text Search の結果を record に反映 */
+/** 営業時間キャッシュを捨てる（別の店に変わった・見つからなかったとき） */
+function clearHours_(rec) {
+  rec.hoursJson = '';
+  rec.regularHoursJson = '';
+  rec.hoursFetchedAt = 0;
+  rec.hoursError = '';
+}
+
+/** Text Search の結果を record に反映（response は通信失敗時 Error） */
 function applySearchResult_(rec, response, now) {
   rec.placeFetchedAt = now;
-  if (response.getResponseCode() !== 200) {
+  if (response instanceof Error || response.getResponseCode() !== 200) {
     rec.status = 'ERROR';
     return;
   }
@@ -312,15 +347,11 @@ function applySearchResult_(rec, response, now) {
     rec.googleAddress = '';
     rec.lat = null;
     rec.lng = null;
-    rec.hoursJson = '';
-    rec.hoursFetchedAt = 0;
+    clearHours_(rec);
     return;
   }
   // 別の店に変わったら営業時間キャッシュは捨てる
-  if (rec.placeId !== p.id) {
-    rec.hoursJson = '';
-    rec.hoursFetchedAt = 0;
-  }
+  if (rec.placeId !== p.id) clearHours_(rec);
   rec.status = 'OK';
   rec.placeId = p.id;
   rec.googleName = (p.displayName && p.displayName.text) || '';
@@ -329,17 +360,49 @@ function applySearchResult_(rec, response, now) {
   rec.lng = p.location.longitude;
 }
 
-/** Place Details（currentOpeningHours）の結果を record に反映 */
+/**
+ * Place Details の結果を record に反映（response は通信失敗時 Error）
+ * 失敗時は古いキャッシュを残し、hoursFetchedAt を更新しない（次回に再取得）。原因は hoursError に記録
+ */
 function applyDetailsResult_(rec, response, now) {
-  if (response.getResponseCode() !== 200) return;  // 失敗時は古いキャッシュを残す
-  var body = JSON.parse(response.getContentText() || '{}');
-  var periods = body.currentOpeningHours && body.currentOpeningHours.periods;
-  rec.hoursJson = periods ? JSON.stringify(periods) : '';
+  var stamp = Utilities.formatDate(new Date(now), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm');
+  if (response instanceof Error) {
+    rec.hoursError = stamp + ' 通信エラー: ' + String(response.message || response).slice(0, 200);
+    return;
+  }
+  var code = response.getResponseCode();
+  var body = {};
+  try { body = JSON.parse(response.getContentText() || '{}'); } catch (e) {}
+  if (code !== 200) {
+    var msg = body.error ? (body.error.status || '') + ' ' + (body.error.message || '') : '';
+    rec.hoursError = (stamp + ' HTTP ' + code + ' ' + msg).trim().slice(0, 300);
+    return;
+  }
+  var cur = body.currentOpeningHours;
+  var reg = body.regularOpeningHours;
+  // currentOpeningHours があって periods が空 = 直近7日は営業なし（臨時休業など）として [] を保存
+  rec.hoursJson = cur ? JSON.stringify(cur.periods || []) : '';
+  rec.regularHoursJson = reg && reg.periods ? JSON.stringify(reg.periods) : '';
   rec.hoursFetchedAt = now;
+  rec.hoursError = '';
 }
 
+/** 1件取得。通信失敗（DNS・タイムアウト等）は例外ではなく Error を返す */
 function fetchOne_(req) {
-  return UrlFetchApp.fetch(req.url, req);
+  try {
+    return UrlFetchApp.fetch(req.url, req);
+  } catch (e) {
+    return e instanceof Error ? e : new Error(String(e));
+  }
+}
+
+/** 並列取得。fetchAll 自体が失敗したら1件ずつ取り直し、失敗分は Error を返す */
+function fetchAllSafe_(reqs) {
+  try {
+    return UrlFetchApp.fetchAll(reqs);
+  } catch (e) {
+    return reqs.map(fetchOne_);
+  }
 }
 
 function distanceKm_(lat1, lng1, lat2, lng2) {
@@ -353,11 +416,12 @@ function distanceKm_(lat1, lng1, lat2, lng2) {
 }
 
 /** クライアントへ返す形 */
+function parseJsonOrNull_(s) {
+  if (!s) return null;
+  try { return JSON.parse(s); } catch (e) { return null; }
+}
+
 function toClientPlace_(rec) {
-  var periods = null;
-  if (rec.hoursJson) {
-    try { periods = JSON.parse(rec.hoursJson); } catch (e) { periods = null; }
-  }
   return {
     placeId: rec.placeId || '',
     googleName: rec.googleName || '',
@@ -366,17 +430,23 @@ function toClientPlace_(rec) {
     lng: rec.lng,
     status: rec.status || '',
     manual: !!rec.manual,
-    periods: periods,
-    hoursFetchedAt: rec.hoursFetchedAt || 0
+    periods: parseJsonOrNull_(rec.hoursJson),               // currentOpeningHours（日付付き・直近7日）
+    regularPeriods: parseJsonOrNull_(rec.regularHoursJson), // regularOpeningHours（毎週の通常営業）
+    hoursFetchedAt: rec.hoursFetchedAt || 0,
+    hoursError: rec.hoursError || ''
   };
 }
 
 /**
  * placesList
- * 入力: { _action:'placesList', shops:[{key,name,address}], lat?, lng? }
+ * 入力: { _action:'placesList', shops:[{key,name,address}], lat?, lng?, withHours? }
  * 1. ShopPlaces に無い／住所が変わったお店を Text Search（最大20件・並列）
  * 2. lat/lng があれば近い順上位20件のうち、営業時間が24時間以上古いものだけ Details（並列）
- * 3. 渡された全店の結果を返す。pending = まだ検索していない件数
+ * 3. withHours（一括取得）なら、営業時間を一度も取得していないお店を最大20件 Details（並列）
+ * 4. 渡された全店の結果を返す
+ *    pending = まだ検索していない件数 / hoursPending = 営業時間が未取得の件数
+ *    quotaExhausted = 1日の上限に達して営業時間を取得できなかった
+ * Details は1日 DAILY_DETAILS_LIMIT 回まで（一括取得は BULK_DETAILS_RESERVE 回を残して止める）
  */
 function placesList_(incoming) {
   var shops = normalizeShops_(incoming.shops);
@@ -406,7 +476,7 @@ function placesList_(incoming) {
 
   if (toSearch.length) {
     apiKey = apiKey || getPlacesApiKey_();
-    var sRes = UrlFetchApp.fetchAll(toSearch.map(function (t) { return searchRequest_(apiKey, t.query); }));
+    var sRes = fetchAllSafe_(toSearch.map(function (t) { return searchRequest_(apiKey, t.query); }));
     toSearch.forEach(function (t, i) {
       var rec = map[t.shop.key] || { key: t.shop.key };
       rec.query = t.query;
@@ -429,12 +499,30 @@ function placesList_(incoming) {
       .slice(0, MAX_DETAILS_PER_CALL)
       .filter(function (x) { return now - x.rec.hoursFetchedAt >= HOURS_TTL_MS; });
 
+    near = near.slice(0, Math.max(0, DAILY_DETAILS_LIMIT - getDetailsUsed_()));
     if (near.length) {
       apiKey = apiKey || getPlacesApiKey_();
-      var dRes = UrlFetchApp.fetchAll(near.map(function (x) { return detailsRequest_(apiKey, x.rec.placeId); }));
-      near.forEach(function (x, i) { applyDetailsResult_(x.rec, dRes[i], now); });
+      fetchDetailsFor_(apiKey, near.map(function (x) { return x.rec; }), now);
       changed = true;
     }
+  }
+
+  // ③ 一括取得：営業時間を一度も取得していないお店（失敗記録のあるものは除く）
+  var neverFetched = function () {
+    return shops
+      .map(function (s) { return map[s.key]; })
+      .filter(function (rec) { return rec && rec.status === 'OK' && rec.placeId && !rec.hoursFetchedAt && !rec.hoursError; });
+  };
+  var quotaExhausted = false;
+  if (incoming.withHours) {
+    var budget = Math.max(0, DAILY_DETAILS_LIMIT - BULK_DETAILS_RESERVE - getDetailsUsed_());
+    var targets = neverFetched().slice(0, Math.min(MAX_DETAILS_PER_CALL, budget));
+    if (targets.length) {
+      apiKey = apiKey || getPlacesApiKey_();
+      fetchDetailsFor_(apiKey, targets, now);
+      changed = true;
+    }
+    quotaExhausted = budget <= targets.length && neverFetched().length > 0;
   }
 
   if (changed) writePlaces_(sheet, map);
@@ -443,7 +531,13 @@ function placesList_(incoming) {
   shops.forEach(function (s) {
     if (map[s.key]) places[s.key] = toClientPlace_(map[s.key]);
   });
-  return { status: 'ok', places: places, pending: pending };
+  return {
+    status: 'ok',
+    places: places,
+    pending: pending,
+    hoursPending: neverFetched().length,
+    quotaExhausted: quotaExhausted
+  };
 }
 
 /**
@@ -467,8 +561,9 @@ function placesRefetch_(incoming) {
   rec.query = query;
   rec.manual = !!custom;
   applySearchResult_(rec, fetchOne_(searchRequest_(apiKey, query)), now);
-  if (rec.status === 'OK') {
-    applyDetailsResult_(rec, fetchOne_(detailsRequest_(apiKey, rec.placeId)), now);
+  // 1日の上限に達していたら座標だけ更新（営業時間は次回の「近くの〜」で取得）
+  if (rec.status === 'OK' && getDetailsUsed_() < DAILY_DETAILS_LIMIT) {
+    fetchDetailsFor_(apiKey, [rec], now);
   }
   map[shop.key] = rec;
   writePlaces_(sheet, map);
@@ -482,9 +577,12 @@ function placesRefetch_(incoming) {
 function testPlacesApi() {
   var apiKey = getPlacesApiKey_();
   var s = fetchOne_(searchRequest_(apiKey, '渋谷駅'));
+  if (s instanceof Error) { Logger.log('Text Search: ' + s.message); return; }
   Logger.log('Text Search: ' + s.getResponseCode() + ' ' + s.getContentText().slice(0, 500));
   if (s.getResponseCode() !== 200) return;
   var p = JSON.parse(s.getContentText()).places[0];
   var d = fetchOne_(detailsRequest_(apiKey, p.id));
+  if (d instanceof Error) { Logger.log('Details: ' + d.message); return; }
   Logger.log('Details: ' + d.getResponseCode() + ' ' + d.getContentText().slice(0, 500));
 }
+
