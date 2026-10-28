@@ -1549,6 +1549,7 @@
     .nearby-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .nearby-visited { font-size: 0.72rem; font-weight: 700; color: var(--accent); }
     .nearby-detail-yt { display: inline-block; font-size: 0.8rem; color: var(--accent); }
+    .nearby-edit-btn { padding: 8px 14px; font-size: 0.8rem; }
     .nearby-main { flex: 1; min-width: 0; }
     .nearby-name { font-weight: 700; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nearby-sub { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2223,6 +2224,7 @@
   function closeEditModal() {
     document.getElementById('editModal').classList.remove('open');
     editingId = null;
+    _refreshOpenNearbyDetail();
   }
 
   function handleOverlayClick(e) {
@@ -2609,7 +2611,18 @@
       ${item.address ? `<div class="card-address">📍 ${esc(item.address)}</div>` : ''}
       ${item.review ? `<div class="card-review">💬 ${esc(item.review)}</div>` : ''}
       ${item.myReview ? `<div class="card-my-review"><span class="card-my-review-label">✍️ 自分の感想</span>${esc(item.myReview)}</div>` : ''}
-      ${ytUrl ? `<a class="nearby-detail-yt" href="${esc(ytUrl)}" target="_blank" rel="noopener noreferrer">▶ 紹介動画</a>` : ''}`;
+      ${ytUrl ? `<a class="nearby-detail-yt" href="${esc(ytUrl)}" target="_blank" rel="noopener noreferrer">▶ 紹介動画</a>` : ''}
+      <div><button class="btn-ghost nearby-edit-btn" onclick="openEditModal(${Number(item.id)})">✏️ 編集</button></div>`;
+  }
+
+  /* 編集画面を閉じたら、開いている行の情報を最新に描き直す（店名・感想・Google上の店名の変更を反映） */
+  function _refreshOpenNearbyDetail() {
+    const entry = document.querySelector('#nearbyList .nearby-entry.open');
+    if (!entry) return;
+    const item = items.find(i => i.id === Number(entry.dataset.id));
+    if (!item) return;
+    entry.querySelector('.nearby-name').textContent = item.name;
+    entry.querySelector('.nearby-detail').innerHTML = _nearbyDetailHtml(item);
   }
 
   function renderNearby(pos, places, offline) {
