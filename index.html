@@ -1543,6 +1543,10 @@
     .nearby-group-sub { font-size: 0.72rem; font-weight: 400; color: var(--muted); }
     .nearby-group .nearby-item { padding: 10px 12px; }
     .nearby-group .nearby-note { padding: 4px 12px 12px; }
+    .nearby-group-toggle { cursor: pointer; }
+    .nearby-group-toggle .nearby-chev { margin-left: auto; transform: rotate(180deg); }
+    .nearby-group.collapsed .nearby-chev { transform: none; }
+    .nearby-group.collapsed .nearby-group-body { display: none; }
     .nearby-entry { border-top: 1px solid var(--border); }
     .nearby-item {
       display: flex; align-items: center; gap: 10px; padding: 10px 6px;
@@ -2449,26 +2453,34 @@
       .catch(() => {});
   }
 
-  /* 既存のお店全件の座標を取得（未取得が 0 件になるまで繰り返す。取得済みは GAS 側でスキップ） */
+  /* 既存のお店全件の座標と営業時間を取得（20件ずつ繰り返す。取得済みは GAS 側でスキップ）
+     営業時間は「一度も取得していないお店」だけ。1日の上限に達したら止め、翌日押すと続きから */
   async function bulkFetchShopPlaces() {
     const btn = document.getElementById('bulkPlacesBtn');
     const shops = _shopPayload(items);
     if (!shops.length) return;
-    if (!confirm('お店 ' + shops.length + ' 件の座標を Google から取得します（取得済みは除外）。よろしいですか？')) return;
+    if (!confirm('お店 ' + shops.length + ' 件の座標と営業時間を Google から取得します（取得済みは除外）。よろしいですか？')) return;
     btn.disabled = true;
     btn.textContent = '📍 取得中…';
+    let last = null, quota = false;
     try {
       for (let round = 0; round < 50; round++) {
-        const d = await placesApi({ _action: 'placesList', shops });
+        const d = await placesApi({ _action: 'placesList', shops, withHours: true });
         _savePlaces(d.places);
-        if (!d.pending) break;
-        btn.textContent = '📍 取得中…（残り ' + d.pending + ' 件）';
+        quota = !!d.quotaExhausted;
+        const progress = d.pending + '/' + d.hoursPending;
+        if ((!d.pending && !d.hoursPending) || quota || progress === last) break;   // 完了・上限・進まない
+        last = progress;
+        btn.textContent = '📍 取得中…（残り 座標' + d.pending + '件・営業時間' + d.hoursPending + '件）';
       }
       const places = _loadPlaces();
-      const ok = shops.filter(s => places[s.key] && places[s.key].status === 'OK').length;
-      showToast('📍 座標を取得しました（' + ok + ' / ' + shops.length + ' 件）');
+      const ok    = shops.filter(s => places[s.key] && places[s.key].status === 'OK').length;
+      const hours = shops.filter(s => places[s.key] && places[s.key].hoursFetchedAt).length;
+      showToast(quota
+        ? '⚠ 本日の上限に達しました。明日もう一度押すと続きから取得します'
+        : '📍 座標 ' + ok + ' 件・営業時間 ' + hours + ' 件を取得済み（全 ' + shops.length + ' 件）');
     } catch(e) {
-      showToast('⚠ 座標の取得に失敗しました');
+      showToast('⚠ 取得に失敗しました（' + e.message + '）');
     }
     btn.disabled = false;
     btn.textContent = '📍 お店の座標を一括取得';
@@ -2700,10 +2712,14 @@
       </div>`;
     if (unknown.length) {
       html += `
-      <div class="nearby-group nearby-group-unknown">
-        <div class="nearby-group-head">❔ 営業時間不明（${unknown.length}件）${unknown.length > NEARBY_UNKNOWN_MAX
-          ? `<span class="nearby-group-sub">近い順に${NEARBY_UNKNOWN_MAX}件を表示</span>` : ''}</div>
-        ${unknown.slice(0, NEARBY_UNKNOWN_MAX).map(rowHtml).join('')}
+      <div class="nearby-group nearby-group-unknown collapsed">
+        <div class="nearby-group-head nearby-group-toggle" role="button" tabindex="0"
+             onclick="this.parentElement.classList.toggle('collapsed')">
+          ❔ 営業時間不明（${unknown.length}件）${unknown.length > NEARBY_UNKNOWN_MAX
+            ? `<span class="nearby-group-sub">近い順に${NEARBY_UNKNOWN_MAX}件を表示</span>` : ''}
+          <span class="nearby-chev">▾</span>
+        </div>
+        <div class="nearby-group-body">${unknown.slice(0, NEARBY_UNKNOWN_MAX).map(rowHtml).join('')}</div>
       </div>`;
     }
     const notes = [];

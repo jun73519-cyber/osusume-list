@@ -167,6 +167,8 @@ const MAX_SEARCH_PER_CALL = 20;   // 1回の呼び出しで Text Search する�
 const MAX_DETAILS_PER_CALL = 20;  // 1回の呼び出しで営業時間を再取得する最大件数（近い順）
 const MAX_SHOPS_PER_CALL = 2000;  // 受け付けるお店一覧の上限
 const HOURS_TTL_MS = 24 * 60 * 60 * 1000;
+const DAILY_DETAILS_LIMIT = 300;  // Details の1日の上限（日本時間で日付が変わるとリセット）
+const BULK_DETAILS_RESERVE = 40;  // 一括取得では使わず「近くの〜」用に残す回数
 // 場所を特定できない住所（検索しない）
 const SKIP_ADDRESS_RE = /デリバリー|全国チェーン|全国展開|オンライン|通販/;
 // 検索フィールド（料金を抑えるため必要な項目だけ）
@@ -193,6 +195,28 @@ function getPlacesApiKey_() {
   var key = PropertiesService.getScriptProperties().getProperty('PLACES_API_KEY');
   if (!key) throw new Error('PLACES_API_KEY が未設定です');
   return key;
+}
+
+/** 今日（日本時間）の Details 呼び出し回数。スクリプトプロパティ DETAILS_QUOTA に {date, count} で保存 */
+function getDetailsUsed_() {
+  var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  var q = parseJsonOrNull_(PropertiesService.getScriptProperties().getProperty('DETAILS_QUOTA')) || {};
+  return q.date === today ? (Number(q.count) || 0) : 0;
+}
+
+function addDetailsUsed_(n) {
+  if (!n) return;
+  var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  PropertiesService.getScriptProperties().setProperty('DETAILS_QUOTA',
+    JSON.stringify({ date: today, count: getDetailsUsed_() + n }));
+}
+
+/** Details をまとめて取得して反映し、回数を記録 */
+function fetchDetailsFor_(apiKey, recs, now) {
+  if (!recs.length) return;
+  var res = fetchAllSafe_(recs.map(function (rec) { return detailsRequest_(apiKey, rec.placeId); }));
+  recs.forEach(function (rec, i) { applyDetailsResult_(rec, res[i], now); });
+  addDetailsUsed_(recs.length);
 }
 
 function getOrCreatePlacesSheet_() {
@@ -415,10 +439,14 @@ function toClientPlace_(rec) {
 
 /**
  * placesList
- * 入力: { _action:'placesList', shops:[{key,name,address}], lat?, lng? }
+ * 入力: { _action:'placesList', shops:[{key,name,address}], lat?, lng?, withHours? }
  * 1. ShopPlaces に無い／住所が変わったお店を Text Search（最大20件・並列）
  * 2. lat/lng があれば近い順上位20件のうち、営業時間が24時間以上古いものだけ Details（並列）
- * 3. 渡された全店の結果を返す。pending = まだ検索していない件数
+ * 3. withHours（一括取得）なら、営業時間を一度も取得していないお店を最大20件 Details（並列）
+ * 4. 渡された全店の結果を返す
+ *    pending = まだ検索していない件数 / hoursPending = 営業時間が未取得の件数
+ *    quotaExhausted = 1日の上限に達して営業時間を取得できなかった
+ * Details は1日 DAILY_DETAILS_LIMIT 回まで（一括取得は BULK_DETAILS_RESERVE 回を残して止める）
  */
 function placesList_(incoming) {
   var shops = normalizeShops_(incoming.shops);
@@ -471,12 +499,30 @@ function placesList_(incoming) {
       .slice(0, MAX_DETAILS_PER_CALL)
       .filter(function (x) { return now - x.rec.hoursFetchedAt >= HOURS_TTL_MS; });
 
+    near = near.slice(0, Math.max(0, DAILY_DETAILS_LIMIT - getDetailsUsed_()));
     if (near.length) {
       apiKey = apiKey || getPlacesApiKey_();
-      var dRes = fetchAllSafe_(near.map(function (x) { return detailsRequest_(apiKey, x.rec.placeId); }));
-      near.forEach(function (x, i) { applyDetailsResult_(x.rec, dRes[i], now); });
+      fetchDetailsFor_(apiKey, near.map(function (x) { return x.rec; }), now);
       changed = true;
     }
+  }
+
+  // ③ 一括取得：営業時間を一度も取得していないお店（失敗記録のあるものは除く）
+  var neverFetched = function () {
+    return shops
+      .map(function (s) { return map[s.key]; })
+      .filter(function (rec) { return rec && rec.status === 'OK' && rec.placeId && !rec.hoursFetchedAt && !rec.hoursError; });
+  };
+  var quotaExhausted = false;
+  if (incoming.withHours) {
+    var budget = Math.max(0, DAILY_DETAILS_LIMIT - BULK_DETAILS_RESERVE - getDetailsUsed_());
+    var targets = neverFetched().slice(0, Math.min(MAX_DETAILS_PER_CALL, budget));
+    if (targets.length) {
+      apiKey = apiKey || getPlacesApiKey_();
+      fetchDetailsFor_(apiKey, targets, now);
+      changed = true;
+    }
+    quotaExhausted = budget <= targets.length && neverFetched().length > 0;
   }
 
   if (changed) writePlaces_(sheet, map);
@@ -485,7 +531,13 @@ function placesList_(incoming) {
   shops.forEach(function (s) {
     if (map[s.key]) places[s.key] = toClientPlace_(map[s.key]);
   });
-  return { status: 'ok', places: places, pending: pending };
+  return {
+    status: 'ok',
+    places: places,
+    pending: pending,
+    hoursPending: neverFetched().length,
+    quotaExhausted: quotaExhausted
+  };
 }
 
 /**
@@ -509,8 +561,9 @@ function placesRefetch_(incoming) {
   rec.query = query;
   rec.manual = !!custom;
   applySearchResult_(rec, fetchOne_(searchRequest_(apiKey, query)), now);
-  if (rec.status === 'OK') {
-    applyDetailsResult_(rec, fetchOne_(detailsRequest_(apiKey, rec.placeId)), now);
+  // 1日の上限に達していたら座標だけ更新（営業時間は次回の「近くの〜」で取得）
+  if (rec.status === 'OK' && getDetailsUsed_() < DAILY_DETAILS_LIMIT) {
+    fetchDetailsFor_(apiKey, [rec], now);
   }
   map[shop.key] = rec;
   writePlaces_(sheet, map);
