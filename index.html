@@ -1514,6 +1514,46 @@
     [data-theme="dark"] .rating-btn.active-3 { background: #15291a; }
     [data-theme="dark"] .rating-btn.active-1 { background: #2e2614; }
     [data-theme="dark"] .btn-see-all.open { background: #2c2418; }
+
+    /* ── 📍 近くの営業中のお店 ── */
+    .nearby-btn {
+      width: 100%; margin-bottom: 14px; padding: 13px 16px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); color: var(--gold); font-size: 0.92rem; font-weight: 700;
+      box-shadow: var(--shadow); cursor: pointer;
+    }
+    .nearby-btn:disabled { opacity: .6; cursor: wait; }
+    .nearby-panel {
+      display: none; margin-bottom: 18px; padding: 14px 14px 10px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .nearby-panel.open { display: block; }
+    .nearby-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .nearby-title { flex: 1; font-weight: 700; color: var(--text); font-size: 0.95rem; }
+    .nearby-status { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
+    .nearby-section { font-size: 0.78rem; font-weight: 700; color: var(--muted); margin: 12px 0 4px; }
+    .nearby-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 6px;
+      border-top: 1px solid var(--border); color: var(--text); text-decoration: none;
+    }
+    .nearby-item:hover { background: var(--surface-2); }
+    .nearby-main { flex: 1; min-width: 0; }
+    .nearby-name { font-weight: 700; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nearby-sub { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nearby-side { text-align: right; flex-shrink: 0; }
+    .nearby-dist { font-size: 0.85rem; font-weight: 700; color: var(--gold); }
+    .nearby-until { font-size: 0.75rem; color: var(--accent); }
+    .nearby-note { font-size: 0.75rem; color: var(--muted); padding: 8px 6px 2px; }
+    #bulkPlacesBtn { margin: 6px 0 0 6px; }
+    #bulkPlacesBtn:disabled { opacity: .6; cursor: wait; }
+
+    /* 編集モーダル内：Google上の店名 */
+    .place-info { font-size: 0.82rem; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; word-break: break-word; }
+    .place-info .muted { color: var(--muted); font-size: 0.75rem; }
+    .place-refetch { display: flex; gap: 8px; }
+    .place-refetch input { flex: 1; min-width: 0; }
+    .place-refetch .btn-ghost { padding: 10px 14px; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -1595,6 +1635,17 @@
     </div>
   </div>
 
+  <!-- 📍 近くの営業中のお店 -->
+  <button class="nearby-btn" id="nearbyBtn" onclick="showNearbyOpenShops()">📍 近くの営業中のお店</button>
+  <div class="nearby-panel" id="nearbyPanel">
+    <div class="nearby-head">
+      <span class="nearby-title">📍 近くの営業中のお店</span>
+      <button class="btn-icon" onclick="closeNearby()" title="閉じる">✕</button>
+    </div>
+    <div class="nearby-status" id="nearbyStatus"></div>
+    <div id="nearbyList"></div>
+  </div>
+
   <!-- 検索バー -->
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
@@ -1632,6 +1683,7 @@
 
   <div class="backup-bar">
     <button class="btn-backup" onclick="exportData()">💾 データをバックアップ（JSONファイルに保存）</button>
+    <button class="btn-backup" id="bulkPlacesBtn" onclick="bulkFetchShopPlaces()">📍 お店の座標を一括取得</button>
   </div>
 </div><!-- /.container -->
 </div><!-- /#tab-list -->
@@ -1764,6 +1816,14 @@
       <div class="form-group full">
         <label for="edit-address">住所</label>
         <input type="text" id="edit-address" />
+      </div>
+      <div class="form-group full" id="edit-place-group">
+        <label for="edit-place-query">📍 Google上の店名（営業時間の取得に使用）</label>
+        <div class="place-info" id="edit-place-info"></div>
+        <div class="place-refetch">
+          <input type="text" id="edit-place-query" placeholder="別の店なら検索語を入力（空なら 名前＋住所）" />
+          <button type="button" class="btn-ghost" id="edit-place-btn" onclick="refetchPlace()">再取得</button>
+        </div>
       </div>
       <div class="form-group full">
         <label for="edit-mapUrl">Google マップ / Amazon URL</label>
@@ -2000,6 +2060,7 @@
       date:        new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })
     });
     save();
+    syncShopPlaces([items[0]]);   // 新しいお店の座標を裏で取得
     clearForm();
     render();
     toggleForm();
@@ -2142,6 +2203,8 @@
     document.getElementById('edit-address').value     = item.address     || '';
     document.getElementById('edit-mapUrl').value      = item.mapUrl      || '';
     document.getElementById('edit-youtubeUrl').value  = item.youtubeUrl  || '';
+    document.getElementById('edit-place-query').value = '';
+    renderEditPlace(item);
     document.getElementById('editModal').classList.add('open');
     setTimeout(() => document.getElementById('edit-name').focus(), 100);
   }
@@ -2166,6 +2229,8 @@
       setTimeout(() => el.style.borderColor = '', 1200);
       return;
     }
+    const placeChanged = item.name !== name ||
+      (item.address || '') !== document.getElementById('edit-address').value.trim();
     item.category    = document.getElementById('edit-category').value;
     item.name        = name;
     item.recommender = document.getElementById('edit-recommender').value.trim();
@@ -2175,6 +2240,7 @@
     item.mapUrl      = document.getElementById('edit-mapUrl').value.trim();
     item.youtubeUrl  = document.getElementById('edit-youtubeUrl').value.trim();
     save();
+    if (placeChanged) syncShopPlaces([item]);   // 店名・住所が変わったら座標を取り直す
     closeEditModal();
     render();
   }
@@ -2309,6 +2375,286 @@
     } catch(e) {
       setSyncStatus('offline', '⚠ 保存失敗（ローカルのみ）');
     }
+  }
+
+  /* ══════════════════════════════════════════════════════
+     📍 近くの営業中のお店（座標・営業時間は GAS 経由で Places API）
+     ─ APIキーは GAS のスクリプトプロパティにのみ保存。ここには書かない
+     ─ 結果は ShopPlaces シート（BookState とは別）。端末には shop_places にキャッシュ
+  ══════════════════════════════════════════════════════ */
+  const PLACES_CACHE_KEY   = 'shop_places';
+  const NEARBY_UNKNOWN_MAX = 20;      // 「営業時間不明」に出す最大件数（近い順）
+  const DAY_MIN            = 1440;
+
+  function _loadPlaces() {
+    try { return JSON.parse(localStorage.getItem(PLACES_CACHE_KEY) || '{}'); } catch(e) { return {}; }
+  }
+  function _savePlaces(places) {
+    const merged = Object.assign(_loadPlaces(), places || {});
+    try { localStorage.setItem(PLACES_CACHE_KEY, JSON.stringify(merged)); } catch(e) {}
+    return merged;
+  }
+
+  /* 本以外を「お店」として GAS に渡す（BookState には店名・住所が無いため） */
+  function _shopPayload(list) {
+    return list.filter(it => it && it.category !== '本')
+      .map(it => ({ key: 'i_' + it.id, name: it.name || '', address: it.address || '' }));
+  }
+
+  /* GAS へ POST。text/plain なのでプリフライト無しでレスポンスを読める。
+     _action 付きなので GAS 側で BookState の上書き処理には入らない */
+  async function placesApi(body) {
+    if (!GAS_URL) throw new Error('GAS_URL 未設定');
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body),
+      redirect: 'follow',
+      cache: 'no-store',
+    });
+    const data = await res.json();
+    if (!data || data.error) throw new Error((data && data.error) || 'no response');
+    return data;
+  }
+
+  /* 追加・編集したお店の座標を裏で取得（失敗しても次回の「近くの〜」で自動的に再挑戦） */
+  function syncShopPlaces(list) {
+    const shops = _shopPayload(list);
+    if (!shops.length || !GAS_URL) return;
+    placesApi({ _action: 'placesList', shops })
+      .then(d => _savePlaces(d.places))
+      .catch(() => {});
+  }
+
+  /* 既存のお店全件の座標を取得（未取得が 0 件になるまで繰り返す。取得済みは GAS 側でスキップ） */
+  async function bulkFetchShopPlaces() {
+    const btn = document.getElementById('bulkPlacesBtn');
+    const shops = _shopPayload(items);
+    if (!shops.length) return;
+    if (!confirm('お店 ' + shops.length + ' 件の座標を Google から取得します（取得済みは除外）。よろしいですか？')) return;
+    btn.disabled = true;
+    btn.textContent = '📍 取得中…';
+    try {
+      for (let round = 0; round < 50; round++) {
+        const d = await placesApi({ _action: 'placesList', shops });
+        _savePlaces(d.places);
+        if (!d.pending) break;
+        btn.textContent = '📍 取得中…（残り ' + d.pending + ' 件）';
+      }
+      const places = _loadPlaces();
+      const ok = shops.filter(s => places[s.key] && places[s.key].status === 'OK').length;
+      showToast('📍 座標を取得しました（' + ok + ' / ' + shops.length + ' 件）');
+    } catch(e) {
+      showToast('⚠ 座標の取得に失敗しました');
+    }
+    btn.disabled = false;
+    btn.textContent = '📍 お店の座標を一括取得';
+  }
+
+  /* ── 営業中判定（日本時間・UTC+9 固定。端末のタイムゾーンに依存しない） ──
+     時刻は「日本時間の壁時計」を分単位の通し番号で扱う。openNow はキャッシュで古くなるため使わない */
+  function _jstNowMin() { return Math.floor((Date.now() + 9 * 3600000) / 60000); }
+
+  /* periods → [開始, 終了] の区間リスト。currentOpeningHours は date 付きなのでそれを優先、
+     date が無い場合は曜日から前週・今週・翌週に展開 */
+  function _intervals(periods, nowMin) {
+    const out = [];
+    const today = nowMin - (nowMin % DAY_MIN);
+    const dow = new Date(today * 60000).getUTCDay();
+    const hm = pt => (pt.hour || 0) * 60 + (pt.minute || 0);
+    const dateMin = d => Date.UTC(d.year, d.month - 1, d.day) / 60000;
+    (periods || []).forEach(p => {
+      if (!p || !p.open) return;
+      if (!p.close) { out.push([-Infinity, Infinity]); return; }   // 閉店なし＝24時間営業
+      const openDays = p.open.date ? [dateMin(p.open.date)]
+        : [-7, 0, 7].map(w => today + (p.open.day - dow + w) * DAY_MIN);
+      openDays.forEach(openDay => {
+        const s = openDay + hm(p.open);
+        let e;
+        if (p.close.date) {
+          e = dateMin(p.close.date) + hm(p.close);
+        } else {
+          e = openDay + ((p.close.day - p.open.day + 7) % 7) * DAY_MIN + hm(p.close);
+          if (e <= s) e += 7 * DAY_MIN;
+        }
+        out.push([s, e]);
+      });
+    });
+    return out;
+  }
+
+  /* 営業中なら閉店時刻（分）、営業時間外なら null */
+  function _openUntil(periods, nowMin) {
+    const iv = _intervals(periods, nowMin);
+    const cur = iv.find(([s, e]) => s <= nowMin && nowMin < e);
+    if (!cur) return null;
+    let end = cur[1];
+    // 「24:00閉店 → 0:00開店」のように区間が続いていれば連結して本当の閉店時刻を出す
+    for (let guard = 0; guard < 14 && isFinite(end); guard++) {
+      const next = iv.find(([s, e]) => s <= end && end < e);
+      if (!next) break;
+      end = next[1];
+    }
+    return end;
+  }
+
+  function _untilLabel(endMin, nowMin) {
+    if (!isFinite(endMin)) return '24時間営業';
+    const dayDiff = Math.floor(endMin / DAY_MIN) - Math.floor(nowMin / DAY_MIN);
+    const m = endMin % DAY_MIN;
+    const t = Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+    if (dayDiff === 0) return '〜' + t + 'まで';
+    if (dayDiff === 1 && m === 0) return '〜24:00まで';
+    if (dayDiff === 1) return '〜翌' + t + 'まで';
+    const d = new Date(endMin * 60000);
+    return '〜' + (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + ' ' + t + 'まで';
+  }
+
+  function _distKm(lat1, lng1, lat2, lng2) {
+    const r = Math.PI / 180;
+    const a = Math.sin((lat2 - lat1) * r / 2) ** 2 +
+              Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lng2 - lng1) * r / 2) ** 2;
+    return 2 * 6371 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  function _fmtKm(km) { return km < 10 ? km.toFixed(1) + 'km' : Math.round(km) + 'km'; }
+
+  function _getPosition() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) return reject(new Error('この端末は位置情報に対応していません'));
+      navigator.geolocation.getCurrentPosition(
+        p => resolve(p.coords),
+        e => reject(new Error(e.code === 1
+          ? '位置情報の利用が許可されていません（ブラウザの設定で許可してください）'
+          : '現在地を取得できませんでした')),
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+      );
+    });
+  }
+
+  async function showNearbyOpenShops() {
+    const btn = document.getElementById('nearbyBtn');
+    const status = document.getElementById('nearbyStatus');
+    document.getElementById('nearbyPanel').classList.add('open');
+    document.getElementById('nearbyList').innerHTML = '';
+    btn.disabled = true;
+    try {
+      status.textContent = '📡 現在地を取得中…';
+      const pos = await _getPosition();
+      status.textContent = '🔎 営業時間を確認中…';
+      let places, offline = false;
+      try {
+        const d = await placesApi({ _action: 'placesList', shops: _shopPayload(items), lat: pos.latitude, lng: pos.longitude });
+        places = _savePlaces(d.places);
+      } catch(e) {
+        places = _loadPlaces();   // オフライン等 → 端末のキャッシュで判定
+        offline = true;
+      }
+      renderNearby(pos, places, offline);
+    } catch(e) {
+      status.textContent = '⚠ ' + e.message;
+    }
+    btn.disabled = false;
+  }
+
+  function closeNearby() {
+    document.getElementById('nearbyPanel').classList.remove('open');
+  }
+
+  function renderNearby(pos, places, offline) {
+    const nowMin = _jstNowMin();
+    const open = [], unknown = [];
+    let closed = 0, noCoord = 0;
+    items.filter(it => it.category !== '本').forEach(it => {
+      const p = places['i_' + it.id];
+      if (!p || p.status !== 'OK' || p.lat == null || p.lng == null) { noCoord++; return; }
+      const row = { it, p, km: _distKm(pos.latitude, pos.longitude, p.lat, p.lng) };
+      if (!Array.isArray(p.periods) || !p.periods.length) { unknown.push(row); return; }
+      const end = _openUntil(p.periods, nowMin);
+      if (end == null) { closed++; return; }
+      row.until = _untilLabel(end, nowMin);
+      open.push(row);
+    });
+    open.sort((a, b) => a.km - b.km);
+    unknown.sort((a, b) => a.km - b.km);
+
+    const rowHtml = r => {
+      const url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(r.p.googleName || r.it.name) +
+                  '&query_place_id=' + encodeURIComponent(r.p.placeId);
+      const sub = r.p.googleName && r.p.googleName !== r.it.name
+        ? 'Google: ' + r.p.googleName
+        : (r.it.subGenre || r.it.category || '');
+      return `
+      <a class="nearby-item" href="${esc(url)}" target="_blank" rel="noopener noreferrer">
+        <div class="nearby-main">
+          <div class="nearby-name">${esc(r.it.name)}</div>
+          <div class="nearby-sub">${esc(sub)}</div>
+        </div>
+        <div class="nearby-side">
+          <div class="nearby-dist">${_fmtKm(r.km)}</div>
+          ${r.until ? `<div class="nearby-until">${esc(r.until)}</div>` : ''}
+        </div>
+      </a>`;
+    };
+
+    const nowLabel = Math.floor((nowMin % DAY_MIN) / 60) + ':' + String(nowMin % 60).padStart(2, '0');
+    document.getElementById('nearbyStatus').textContent =
+      nowLabel + ' 時点 ・ 営業中 ' + open.length + ' 件' + (offline ? '（⚠ オフラインのため保存済みデータで判定）' : '');
+
+    let html = '<div class="nearby-section">🟢 いま営業中</div>';
+    html += open.length ? open.map(rowHtml).join('') : '<div class="nearby-note">近くに営業中のお店はありません</div>';
+    if (unknown.length) {
+      html += '<div class="nearby-section">❔ 営業時間不明</div>';
+      html += unknown.slice(0, NEARBY_UNKNOWN_MAX).map(rowHtml).join('');
+    }
+    const notes = [];
+    if (closed)  notes.push('営業時間外 ' + closed + ' 件は非表示');
+    if (noCoord) notes.push('位置情報なし ' + noCoord + ' 件（デリバリー・全国チェーン・未取得など）');
+    if (notes.length) html += '<div class="nearby-note">' + esc(notes.join(' ／ ')) + '</div>';
+    document.getElementById('nearbyList').innerHTML = html;
+  }
+
+  /* ── 編集モーダル：Google上の店名の確認と再取得 ── */
+  function _placeInfoHtml(p) {
+    if (!p) return '<span class="muted">未取得（「近くの営業中のお店」か「座標を一括取得」で自動取得されます）</span>';
+    if (p.status === 'SKIPPED')   return '<span class="muted">住所が「デリバリー」「全国チェーン」等のため取得していません</span>';
+    if (p.status === 'NOT_FOUND') return '<span class="muted">⚠ Google で見つかりませんでした。検索語を入れて再取得してください</span>';
+    if (p.status === 'ERROR')     return '<span class="muted">⚠ 取得エラー。再取得してください</span>';
+    const hours = Array.isArray(p.periods) && p.periods.length ? '営業時間あり' : '営業時間不明';
+    const at = p.hoursFetchedAt
+      ? '（' + new Date(p.hoursFetchedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' 取得）'
+      : '';
+    return `<strong>${esc(p.googleName)}</strong>${p.manual ? ' <span class="muted">（検索語を手動指定）</span>' : ''}<br>` +
+           `<span class="muted">${esc(p.googleAddress)}<br>${hours}${at}</span>`;
+  }
+
+  function renderEditPlace(item) {
+    const group = document.getElementById('edit-place-group');
+    if (!item || item.category === '本') { group.style.display = 'none'; return; }
+    group.style.display = '';
+    document.getElementById('edit-place-info').innerHTML = _placeInfoHtml(_loadPlaces()['i_' + item.id]);
+  }
+
+  async function refetchPlace() {
+    const item = items.find(i => i.id === editingId);
+    if (!item) return;
+    const btn  = document.getElementById('edit-place-btn');
+    const info = document.getElementById('edit-place-info');
+    btn.disabled = true;
+    info.innerHTML = '<span class="muted">🔎 取得中…</span>';
+    try {
+      const d = await placesApi({
+        _action: 'placesRefetch',
+        key:     'i_' + item.id,
+        name:    document.getElementById('edit-name').value.trim(),
+        address: document.getElementById('edit-address').value.trim(),
+        query:   document.getElementById('edit-place-query').value.trim(),
+      });
+      _savePlaces({ [d.key]: d.place });
+      info.innerHTML = _placeInfoHtml(d.place);
+    } catch(e) {
+      info.innerHTML = '<span class="muted">⚠ 再取得に失敗しました（' + esc(e.message) + '）</span>';
+    }
+    btn.disabled = false;
   }
 
   /* ══════════════════════════════
